@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LED Control Panel</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 70%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    button { padding: 6px 10px; cursor: pointer; border-radius: 5px; }
+    .on { background-color: #4CAF50; color: white; }
+    .off { background-color: #f44336; color: white; }
+  </style>
+  <script>
+    async function toggleLED(id) {
+      const res = await fetch(`/leds/toggle/${id}/`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert("Error: " + data.message);
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>LED Control Panel</h1>
+  <p><a href="/leds/register/">Register New LED</a></p>
+  <table>
+    <tr>
+      <th>Device</th>
+      <th>LED Name</th>
+      <th>Pin</th>
+      <th>State</th>
+      <th>Action</th>
+    </tr>
+    {% for led in leds %}
+    <tr>
+      <td>{{ led.device.name }}</td>
+      <td>{{ led.name }}</td>
+      <td>{{ led.number }}</td>
+      <td>{{ led.get_state_display }}</td>
+      <td>
+<button
+  class="{% if led.state == 1 %}on{% else %}off{% endif %}"
+  onclick="toggleLED({{ led.id }})">
+  {% if led.state == 1 %}Turn OFF{% else %}Turn ON{% endif %}
+</button>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5">No LEDs registered yet.</td></tr>
+    {% endfor %}
+  </table>
+</body>
+</html>

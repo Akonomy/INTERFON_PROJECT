@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arduino Control Panel</title>
+    {% load static %}
+    <link rel="icon" type="image/png" href="{% static 'images/icons/favicon.ico' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'fonts/font-awesome-4.7.0/css/font-awesome.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/util.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/dashboard.css' %}">
+    <style>
+        /* General Dark Theme Styling */
+        body {
+            background-color: #1a1a1a;
+            color: #dcdcdc;
+            font-family: Poppins, Arial, sans-serif;
+        }
+
+
+
+        /* Main Content Area */
+        main {
+            padding: 20px;
+        }
+
+        h1 {
+            color: #b0c4de;
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        /* Card Styling */
+        .card {
+            background-color: #1f1f1f;
+            border-radius: 8px;
+            color: #dcdcdc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            background-color: #2c3e50;
+            color: #b0c4de;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .card-body {
+            padding: 15px;
+        }
+
+        /* Dropdown Styling */
+        select {
+            background-color: #1a1a1a;
+            color: whitesmoke;
+            border: 1px solid #2c3e50;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 0.875rem;
+            width: 100%;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #4caf50;
+        }
+
+        select option {
+            background-color: #1a1a1a;
+            color: whitesmoke;
+        }
+
+        select option:hover {
+            background-color: #2c3e50;
+        }
+
+        /* Button Styling */
+        .btn {
+            background-color: #2c3e50;
+            color: #b0c4de;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            background-color: #3b4b5b;
+        }
+
+        /* Range Slider */
+        input[type="range"] {
+            width: 100%;
+            appearance: none;
+            background: linear-gradient(90deg, #2196F3, #FF5722);
+            height: 6px;
+            border-radius: 12px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #ffffff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]:hover {
+            background: linear-gradient(90deg, #1E88E5, #FF7043);
+        }
+
+        /* Sensor Value Display */
+        .sensor-value-display span {
+            font-size: 1rem;
+            color: #b0c4de;
+        }
+
+        /* Toggle Switch */
+        .sensor-active-toggle input {
+            display: none;
+        }
+
+        .sensor-active-toggle label {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background-color: #ccc;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .sensor-active-toggle input:checked + label {
+            background-color: #4caf50;
+        }
+
+        .sensor-active-toggle label:before {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .sensor-active-toggle input:checked + label:before {
+            transform: translateX(16px);
+        }
+    </style>
+</head>
+<body class="dashboard-body">
+    <div class="container-fluid dashboard-container">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-4 col-lg-2 d-md-block sidebar sidebar-navigation">
+                <div class="sidebar-sticky">
+                    <h4 class="text-center py-4 sidebar-title">Tablou de Bord</h4>
+                    <ul class="nav flex-column sidebar-menu">
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'main:dashboard' %}">
+                                <i class="fa fa-home"></i> Acasă
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <a  class="nav-link  menu-link"href="{% url 'main:profile' %}">
+                                <i class="fa fa-user"></i> Profil
+                            </a>
+                        </li>
+                        <li class="nav-item  menu-item">
+                            <a class="nav-link active menu-link" href="{% url 'arduino_comm:active_sensors_page' %}">
+                                <i class="fa fa-cog"></i> Setări
+                            </a>
+                        </li>
+
+                          <li class="nav-item  menu-item">
+                            <a class="nav-link menu-link" href="{% url 'arduino_comm:control_panel' %}">
+                                <i class="fa fa-cog"></i> Control
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'main:logout' %}">
+                                <i class="fa fa-sign-out"></i> Deconectare
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <h5 class="text-center">Stare Cont</h5>
+                            <p class="text-15left"><strong>Abonament:</strong> Activ</p>
+                            <p class="text-15left"><strong>Ultima Conectare:</strong> Nov. 20, 2024, 7:17 p.m.</p>
+                            <p class="text-15left"><strong>Email:</strong> test@email.com</p>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <h5 class="card-title text-center">Notificări</h5>
+                            <p class="text-15left">Rămâneți la curent</p>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+     <!-- Main Content -->
+            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 main-header">
+                    <h1 class="welcome-message">Arduino Control Panel  [DEMO PURPOSE]</h1>
+                </div>
+
+                <!-- Profile Content -->
+        <!-- Main Content -->
+       
+<div id="sensor-info" class="container my-4">
+    
+    
+         <div class ="row" id="sensor-list">
+        {% for sensor in device_status %}
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <!-- Sensor Name and Active Toggle -->
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><strong>{{ sensor.name }}</strong></span>
+                        <div class="sensor-active-toggle">
+                            <input type="checkbox" id="active-{{ sensor.id }}" class="sensor-active-toggle" data-id="{{ sensor.id }}" {% if sensor.active %}checked{% endif %}>
+                            <label for="active-{{ sensor.id }}" class="slider"></label>
+                        </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="card-body">
+                        <!-- Sensor Type Dropdown -->
+                        <div class="mb-3">
+                            <label for="type-{{ sensor.id }}">Type:</label>
+                            <select id="type-{{ sensor.id }}" class="form-select sensor-type-select" data-id="{{ sensor.id }}">
+                                <option value="input" {% if sensor.type == "input" %}selected{% endif %}>Input</option>
+                                <option value="output" {% if sensor.type == "output" %}selected{% endif %}>Output</option>
+                            </select>
+                        </div>
+
+                        {% if sensor.type == "output" %}
+                            <!-- Sensor Mode Dropdown -->
+                            <div class="mb-3">
+                                <label for="mode-{{ sensor.id }}">Mode:</label>
+                                <select id="mode-{{ sensor.id }}" class="form-select sensor-mode-select" data-id="{{ sensor.id }}">
+                                    <option value="digital" {% if sensor.mode == "digital" %}selected{% endif %}>Digital</option>
+                                    <option value="analog" {% if sensor.mode == "analog" %}selected{% endif %}>Analog</option>
+                                </select>
+                            </div>
+
+
+                            <!-- Digital Controls -->
+                            <div id="{{ sensor.id }}-digital-controls" class="digital-controls {% if sensor.mode == "digital" %}active{% endif %}">
+                                <button class="btn btn-secondary btn-sm" onclick="sendDigitalCommand('{{ sensor.id }}', 'high')">High</button>
+                                <button class="btn btn-secondary btn-sm" onclick="sendDigitalCommand('{{ sensor.id }}', 'low')">Low</button>
+                            </div>
+
+                            <!-- Analog Controls -->
+                            <div id="{{ sensor.id }}-analog-controls" class="analog-controls {% if sensor.mode == "analog" %}active{% endif %}">
+                                <input type="range" id="range-{{ sensor.id }}" min="0" max="255" value="{{ sensor.value }}" oninput="sendAnalogValue('{{ sensor.id }}', this.value)">
+                                <span id="{{ sensor.id }}-value">{{ sensor.value }}</span>
+                            </div>
+                        {% else %}
+                            <!-- Input Sensor Value Display -->
+                            <div class="sensor-value-display">
+                                {% if sensor.mode == "digital" %}
+                                    <p>Value: <span id="{{ sensor.id }}-value">
+                                        {% if sensor.value %}High{% else %}Low{% endif %}
+                                    </span></p>
+                                {% else %}
+                                    <p>Value: <span id="{{ sensor.id }}-value">{{ sensor.value }}</span></p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Sensor Name and Save Button -->
+                    <div class="sensor-settings card-footer d-flex flex-column">
+                        <label for="name-{{ sensor.id }}">Name:</label>
+                        <input type="text" id="name-{{ sensor.id }}" value="{{ sensor.name }}" class="sensor-name-input form-control" data-id="{{ sensor.id }}">
+                        <button class="btn btn-primary save-sensor-button mt-2" data-id="{{ sensor.id }} " onclick="saveSensors()">Save</button>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    
+</div>
+
+<script>
+// Toggle sensor active status and update box color
+$(".sensor-active-toggle").on("change", function() {
+    const sensorId = $(this).data("id");
+    const isActive = $(this).is(":checked");
+    const sensorItem = $("#sensor-" + sensorId);
+
+    // Update active class for UI
+    if (isActive) {
+        sensorItem.addClass("active");
+    } else {
+        sensorItem.removeClass("active");
+    }
+
+    // Immediately save active status to server
+    saveSensorData(sensorId, { active: isActive });
+});
+
+// Mode selection change
+$(".sensor-mode-select").on("change", function() {
+    const sensorId = $(this).data("id");
+    const mode = $(this).val();
+
+    // Show relevant controls
+    const digitalControls = $("#" + sensorId + "-digital-controls");
+    const analogControls = $("#" + sensorId + "-analog-controls");
+    if (mode == "digital") {
+        digitalControls.addClass("active");
+        analogControls.removeClass("active");
+    } else {
+        analogControls.addClass("active");
+        digitalControls.removeClass("active");
+    }
+
+    // Save mode change immediately
+    saveSensorData(sensorId, { mode: mode });
+});
+
+// Type selection change
+$(".sensor-type-select").on("change", function() {
+    const sensorId = $(this).data("id");
+    const type = $(this).val();
+
+    const modeSelector = $("#mode-" + sensorId).closest(".mode-selector");
+    const controls = $("#sensor-" + sensorId + " .controls");
+    const valueDisplay = $("#sensor-" + sensorId + " .sensor-value-display");
+
+    if (type == "input") {
+        modeSelector.hide();
+        controls.hide();
+        valueDisplay.show();
+    } else if (type == "output") {
+        modeSelector.show();
+        controls.show();
+        valueDisplay.hide();
+    }
+
+    // Save type change immediately
+    saveSensorData(sensorId, { type: type });
+});
+
+// Capture digital commands (high/low)
+function sendDigitalCommand(sensorId, status) {
+    // Set button as active
+    $("#" + sensorId + "-digital-controls .btn-secondary").removeClass("active");
+    $("#" + sensorId + "-digital-controls .btn-secondary:contains(" + status + ")").addClass("active");
+
+    // Save high/low status immediately
+    saveSensorData(sensorId, { status: status });
+}
+
+// Capture analog value changes
+function sendAnalogValue(sensorId, value) {
+    $("#" + sensorId + "-value").text(value); // Display value
+    saveSensorData(sensorId, { value: value }); // Save value immediately
+}
+
+// Save name input changes immediately
+$(".sensor-name-input").on("change", function() {
+    const sensorId = $(this).data("id");
+    const name = $(this).val();
+    saveSensorData(sensorId, { name: name });
+});
+
+// General function to send data updates to server
+function saveSensorData(sensorId, data) {
+    data.sensor_id = sensorId; // Ensure sensor ID is included
+    $.ajax({
+        url: "{% url 'arduino_comm:save_sensors' %}",
+        type: "POST",
+        data: JSON.stringify({ sensors: [data] }), // Send as array
+        contentType: "application/json",
+        success: function(response) {
+            console.log("Sensor data updated:", response);
+        },
+        error: function() {
+            console.error("Failed to update sensor data for sensor", sensorId);
+        }
+    });
+}
+
+
+</script>
+</body>
+</html>

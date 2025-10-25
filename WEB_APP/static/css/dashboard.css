@@ -1,0 +1,481 @@
+/*//////////////////////////////////////////////////////////////////
+[ Dashboard Styling with Navy Blue Dark Theme and Organized Components ]
+//////////////////////////////////////////////////////////////////*/
+
+/* General Body and Container Styling */
+.dashboard-body {
+  background-color: #1a1a1a;
+  color: #dcdcdc;
+  font-family: Poppins-Regular;
+}
+
+.dashboard-container {
+  padding: 0;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Sidebar Styling ]
+//////////////////////////////////////////////////////////////////*/
+.sidebar-navigation {
+  background-color: #1a1a1a;
+  height: 100vh;
+}
+
+.sidebar-title {
+  color: #b0c4de;
+  font-family: Poppins-Bold;
+}
+
+.sidebar-menu .menu-item .menu-link {
+  color: #b0c4de;
+  font-size: 15px;
+}
+
+.sidebar-menu .menu-item .menu-link:hover,
+.sidebar-menu .menu-item .menu-link.active {
+  background-color: #2c3e50;
+  color: #ffffff;
+  font-weight: bold;
+  border-radius: 4px;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Main Content Header Styling ]
+//////////////////////////////////////////////////////////////////*/
+.main-header {
+  background-color: #2c3e50;
+  color: #dcdcdc;
+  padding: 1rem;
+  font-family: Poppins-Bold;
+}
+
+.welcome-message {
+  color: #b0c4de;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Info Panel Card Styling ]
+//////////////////////////////////////////////////////////////////*/
+.info-panel .card {
+  background-color: #1f1f1f;
+  border: none;
+  border-radius: 8px;
+  color: #dcdcdc;
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.6);
+}
+
+.card .card-title {
+  font-family: Poppins-Bold;
+  color: #b0c4de;
+}
+
+.card .card-text {
+  font-family: Poppins-Regular;
+  color: #a9a9a9;
+}
+
+.card a {
+  color: #6699cc;
+  text-decoration: none;
+}
+
+.card a:hover {
+  color: #4b759b;
+  text-decoration: underline;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Button Styling ]
+//////////////////////////////////////////////////////////////////*/
+.btn-primary {
+  background-color: #003366;
+  border: none;
+  color: #ffffff;
+  font-family: Montserrat-Bold;
+  transition: background-color 0.4s;
+}
+
+.btn-primary:hover {
+  background-color: #002244;
+}
+
+.btn-secondary {
+  background-color: #4d4d4d;
+  border: none;
+  color: #ffffff;
+  font-family: Montserrat-Bold;
+}
+
+.btn-secondary:hover {
+  background-color: #333333;
+}
+
+.btn-danger {
+  background-color: #d9534f;
+  border: none;
+  color: #ffffff;
+  font-family: Montserrat-Bold;
+}
+
+.btn-danger:hover {
+  background-color: #c9302c;
+}
+
+/* Section Titles */
+.section-title {
+  color: #b0c4de;
+  font-family: Poppins-Bold;
+  margin-bottom: 1rem;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Sensor Card Styling - Smaller Square-Like Cards ]
+//////////////////////////////////////////////////////////////////*/
+.sensor-card {
+  height: 220px; /* Reduced height for a more square shape */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: #1f1f1f;
+  border: none;
+  border-radius: 8px;
+  color: #dcdcdc;
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.6);
+  padding: 0.8rem; /* Reduced padding */
+}
+
+.card-body {
+  flex: 1; /* Allow the card body to grow and fill available space */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.top-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem; /* Reduced margin */
+}
+
+.sensor-card .card-title {
+  font-size: 16px; /* Slightly smaller title */
+  color: #b0c4de;
+  font-family: Poppins-Bold;
+  margin: 0;
+}
+
+.sensor-card .card-body p {
+  margin: 0;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Dynamic Background Colors for Status Indicators ]
+//////////////////////////////////////////////////////////////////*/
+.bg-blue {
+  background-color: rgba(0, 191, 255, 0.2);
+  color: #ffffff;
+  transition: background-color 0.4s;
+}
+.bg-dark {
+  background-color: pink ;
+  transition: background-color 0.4s;
+}
+  .bg-dark1 {
+            background-color: #171e21;
+            transition: background-color 0.4s;
+            color: #ffffff; /* Ensure text is visible */
+            font-size: 1.5rem; /* Make text larger */
+            padding: 2rem; /* Add padding for better spacing */
+            border-radius: 10px; /* Smooth corners */
+            width: 100%; /* Take up full width */
+            max-width: 100%; /* Prevent extra constraints */
+        }
+
+        .bg-dark1 .card-body {
+            text-align: center;
+        }
+
+.info-profile1{
+
+font-size: 1.5rem
+}
+
+.bg-orange {
+  background-color: rgba(255, 140, 0, 0.2);
+  color: #ffffff;
+  transition: background-color 0.4s;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Sensor Status Styling ]
+//////////////////////////////////////////////////////////////////*/
+.status-high {
+  color: #00ff00;
+}
+
+.status-low {
+  color: #ff6347;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Range Slider and Labels Styling ]
+//////////////////////////////////////////////////////////////////*/
+.range-slider-container {
+  position: relative;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.3rem; /* Reduced margin */
+}
+
+.range-slider {
+  width: 100%;
+  accent-color: #003366;
+}
+
+.range-labels .text-muted {
+  font-size: 0.8rem;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Display Styling for Analog and Digital Values ]
+//////////////////////////////////////////////////////////////////*/
+.sensor-value-display h2 {
+  font-size: 1.8rem; /* Reduced font size */
+  color: #b0c4de;
+  margin: 0;
+}
+
+.analog-value-display, .digital-control {
+  color: #a9a9a9;
+  font-size: 14px;
+  margin-top: 0.5rem;
+  width:80%;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Preset Buttons Styling ]
+//////////////////////////////////////////////////////////////////*/
+.preset-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.preset-buttons button {
+  margin: 0.2rem;
+  background-color: #666;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem; /* Reduced font size */
+  transition: background-color 0.3s;
+  flex: 1 1 auto;
+  max-width: 100px; /* Reduced max width */
+}
+
+.preset-buttons button:hover {
+  background-color: #4caf50;
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Toggle Switch Styling ]
+//////////////////////////////////////////////////////////////////*/
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #4caf50;
+}
+
+input:checked + .slider:before {
+  transform: translateX(14px);
+}
+
+/*//////////////////////////////////////////////////////////////////
+[ Typography Adjustments ]
+//////////////////////////////////////////////////////////////////*/
+h1, h2, h3, h4, h5, h6 {
+  color: #b0c4de;
+}
+
+p, a {
+  color: #a9a9a9;
+}
+
+a:hover {
+  color: #6699cc;
+}
+
+/* Enhanced Shadows */
+.shadow-lg {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8);
+}
+
+
+/*//////////////////////////////////////////////////////////////////
+[ Digital Outputs Styling ]
+//////////////////////////////////////////////////////////////////*/
+
+
+
+
+
+/* Text Colors for Blue and Orange */
+.text-blue {
+  color: #007bff;
+}
+
+.text-orange {
+  color: #ff8800;
+}
+
+.text-15left {
+
+  
+  margin-left: 15px;
+}
+
+
+
+
+
+
+/* Analog Outputs Slider Styling */
+.analog-slider {
+    width: 100%;
+    appearance: none;
+    height: 6px; /* Height of the slider */
+    border-radius: 12px; /* Rounded edges */
+    background: linear-gradient(90deg, #2196F3, #FF5722); /* Gradient for the track */
+    outline: none;
+    margin: 10px 0;
+    transition: background 0.3s ease; /* Smooth transition for background changes */
+}
+
+.analog-slider:hover {
+    background: linear-gradient(90deg, #1E88E5, #FF7043); /* Darker gradient on hover */
+}
+
+.analog-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px; /* Thumb width */
+    height: 18px; /* Thumb height */
+    border-radius: 50%; /* Fully rounded thumb */
+    background: #FFF; /* White thumb */
+    border: 2px solid #2196F3; /* Blue border */
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s; /* Interaction effects */
+}
+
+.analog-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2); /* Slightly larger on hover */
+    background: #E3F2FD; /* Light blue hover effect */
+}
+
+.analog-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #FFF;
+    border: 2px solid #2196F3;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.analog-slider::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    background: #E3F2FD;
+}
+
+.analog-slider::-ms-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #FFF;
+    border: 2px solid #2196F3;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.analog-slider::-ms-thumb:hover {
+    transform: scale(1.2);
+    background: #E3F2FD;
+}
+
+
+
+
+
+
+/* Lock Icon Styling */
+.lock-icon-container {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+}
+
+.lock-icon {
+    font-size: 5.5rem;
+    transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+.lock-blue {
+    color: #007bff; /* Blue */
+    opacity: 1;
+}
+
+.lock-orange {
+    color: #ff8800; /* Orange */
+    opacity: 1;
+}
+
+.lock-invisible {
+    opacity: 0;
+    pointer-events: none; /* Prevent interaction when invisible */
+}
+
+
+.big-gradient-text{
+font-size: 40px;
+
+}

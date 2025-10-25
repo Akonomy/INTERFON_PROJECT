@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Tablou de bord</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% load static %}
+    {% load custom_filters %}
+
+    <link rel="icon" type="image/png" href="{% static 'images/icons/favicon.ico' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'fonts/font-awesome-4.7.0/css/font-awesome.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/util.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/dashboard.css' %}">
+</head>
+<body class="dashboard-body">
+    <div class="container-fluid dashboard-container">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-4 col-lg-2 d-md-block sidebar sidebar-navigation">
+                <div class="sidebar-sticky">
+                    <h4 class="text-center py-4 sidebar-title">Tablou de Bord</h4>
+                    <ul class="nav flex-column sidebar-menu">
+                        <li class="nav-item menu-item">
+                            <a class="nav-link active menu-link" href="{% url 'main:dashboard' %}">
+                                <i class="fa fa-home"></i> Acasă
+                            </a>
+                        </li>
+
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'main:profile' %}">
+                                <i class="fa fa-user"></i> Profil
+                            </a>
+                        </li>
+
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'arduino_comm:active_sensors_page' %}">
+                                <i class="fa fa-cog"></i> Setări
+                            </a>
+                        </li>
+
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'main:logout' %}">
+                                <i class="fa fa-sign-out"></i> Deconectare
+                            </a>
+                        </li>
+
+                        <li class="nav-item menu-item">
+                            <br><br>
+                            <h5 class="text-center">Stare Cont</h5>
+                            <p class="text-15left"><strong>Abonament:</strong> Activ</p>
+                            <p class="text-15left"><strong>Ultima Conectare:</strong> {{ request.user.last_login }}</p>
+                            <p class="text-15left"><strong>Email:</strong> {{ request.user.email }}<br><br></p>
+                        </li>
+
+                        <li class="nav-item menu-item">
+                            <h5 class="card-title text-center">Notificări</h5>
+                            <p class="text-15left">Rămâneți la curent</p>
+                            <ul class="list-unstyled notifications-list text-15left"></ul>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 main-header">
+                    <h1 class="welcome-message">Bun venit, {{ request.user.username }}</h1>
+                </div>
+
+                <!-- Outputs Section -->
+                <div class="outputs-section mt-4">
+                    <!-- Analog Outputs Group -->
+                    <h3 class="section-title">Utilități</h3>
+                    <div class="analog-group">
+                        <div class="row mb-4">
+                            {% for sensor in analog_outputs %}
+                                <div class="col-md-6 analog-output">
+                                    <div class="card shadow-sm sensor-card analog-card" id="sensor-{{ sensor.id }}">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <h5 class="card-title">{{ sensor.name }}</h5>
+                                            </div>
+                                            <div class="text-center">
+                                                {% if sensor.id == 'sensor_3' %}
+                                                    <span id="value-display-{{ sensor.id }}" class="analog-value-display big-gradient-text">
+                                                        {% if sensor.value == 0 %}
+                                                            OPRIT
+                                                        {% else %}
+                                                            {{ sensor.value|value_to_kelvin }}
+                                                        {% endif %}
+                                                    </span>
+                                                {% elif sensor.id == 'sensor_4' %}
+                                                    <span id="value-display-{{ sensor.id }}" class="analog-value-display big-gradient-text">
+                                                        {% if sensor.value == 0 %}
+                                                            OPRIT
+                                                        {% else %}
+                                                            {{ sensor.value|value_to_celsius }}
+                                                        {% endif %}
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                            <input type="range" class="analog-control analog-slider" 
+                                                   min="0" max="255" 
+                                                   value="{{ sensor.value }}" 
+                                                   onchange="sendAnalogValue('{{ sensor.id }}', this.value)"
+                                                   
+                                                   >
+                                            <div class="preset-buttons text-center mt-3">
+                                                {% if sensor.id == 'sensor_3' %}
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 50)">DORMITOR</button>
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 128)">BIROU</button>
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 250)">ATELIER</button>
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 0)">OPRIT</button>
+                                                {% elif sensor.id == 'sensor_4' %}
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 50)">RECE</button>
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 93)">OBISNUIT</button>
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 250)">FOARTE CALD</button>
+                                                    <button class="btn btn-secondary btn-sm" onclick="sendPresetValue('{{ sensor.id }}', 0)">OPRIT</button>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if forloop.counter|divisibleby:2 and not forloop.last %}
+                                    </div><div class="row mb-4">
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Digital Outputs Group -->
+                    <h3 class="section-title mt-4">Uși</h3>
+                    <div class="digital-group">
+                        <div class="row mb-4">
+                            {% for sensor in digital_outputs %}
+
+                                <div class="col-md-6 digital-output">
+                                    <div class="card shadow-sm sensor-card digital-card" id="sensor-{{ sensor.id }}">
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ sensor.name }}</h5>
+                                            <div class="lock-icon-container">
+                                                <i class="fa fa-lock lock-icon lock-invisible"></i>
+                                            </div>
+                                            <button class="btn btn-secondary digital-control high-button" onclick="sendDigitalCommand('{{ sensor.id }}', 'high')">BLOCHEAZĂ</button>
+                                            <button class="btn btn-secondary digital-control low-button" onclick="sendDigitalCommand('{{ sensor.id }}', 'low')">DEBLOCHEAZĂ</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if forloop.counter|divisibleby:2 and not forloop.last %}
+                                    </div><div class="row mb-4">
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                               <!-- Digital Inputs Section -->
+               
+                        {% for sensor in digital_inputs %}
+                            
+                                <div class="card shadow-sm lock-invisible"
+                                     id="sensor-{{ sensor.id }}"
+                                     {% if sensor.value == 1 %} 
+                                     style="background-color: {% if sensor.id == 'sensor_9' %}blue{% elif sensor.id == 'sensor_8' %}orange{% endif %};"
+                                     {% endif %}>
+                                    <div class="card-body">
+                                        <h5 class="card-title">Sensor {{ sensor.name }}</h5>
+                                        <p><strong>Mode:</strong> Digital</p>
+                                        <p><strong>Status:</strong> 
+                                            <span class="{% if sensor.status == 'high' %}high{% else %}low{% endif %}">
+                                                {{ sensor.status|title }}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                           
+                        {% endfor %}
+              
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Load JS Files -->
+    <script src="{% static 'vendor/jquery/jquery-3.2.1.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/popper.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.min.js' %}"></script>
+    <script>
+        const sendCommandUrl = "{% url 'arduino_comm:send_command' %}";
+        const sensorDataUrl = "{% url 'main:sensor_data' %}";
+        const csrfToken = "{{ csrf_token }}";
+    </script>
+    <script src="{% static 'js/dashboard.js' %}"></script>
+</body>
+</html>

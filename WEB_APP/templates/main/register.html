@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Interfață de Înregistrare!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% load static %}
+    <!-- Load Static Assets -->
+    <link rel="icon" type="image/png" href="{% static 'images/icons/favicon.ico' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'fonts/font-awesome-4.7.0/css/font-awesome.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/animate/animate.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/css-hamburgers/hamburgers.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/select2/select2.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/util.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+</head>
+<body>
+    <div class="limiter">
+        <div class="container-login100">
+            <div class="wrap-login100">
+                <div class="login100-pic js-tilt" data-tilt>
+                    <img src="{% static 'images/img-01.png' %}" alt="IMG">
+                </div>
+
+                <!-- Django Registration Form -->
+                <form method="post" class="login100-form validate-form">
+                    {% csrf_token %}
+                    <span class="login100-form-title">
+                        Înregistrare Proiect AIA
+                    </span>
+
+                    <!-- Username Field -->
+                    <div class="wrap-input100 validate-input" data-validate="Introduce-ți un nume de utilizator valid">
+                        <input class="input100" type="text" name="username" placeholder="Utilizator">
+                        <span class="focus-input100"></span>
+                        <span class="symbol-input100">
+                            <i class="fa fa-user" aria-hidden="true"></i>
+                        </span>
+                    </div>
+
+                    <!-- Email Field -->
+                    <div class="wrap-input100 validate-input" data-validate="Introduce-ți o adresă de email validă">
+                        <input class="input100" type="email" name="email" placeholder="Email">
+                        <span class="focus-input100"></span>
+                        <span class="symbol-input100">
+                            <i class="fa fa-envelope" aria-hidden="true"></i>
+                        </span>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="wrap-input100 validate-input" data-validate="Parola este necesară">
+                        <input class="input100" type="password" name="password" placeholder="Parolă">
+                        <span class="focus-input100"></span>
+                        <span class="symbol-input100">
+                            <i class="fa fa-lock" aria-hidden="true"></i>
+                        </span>
+                    </div>
+
+                    <!-- Confirm Password Field -->
+                    <div class="wrap-input100 validate-input" data-validate="Confirmați parola">
+                        <input class="input100" type="password" name="confirm_password" placeholder="Confirmă Parola">
+                        <span class="focus-input100"></span>
+                        <span class="symbol-input100">
+                            <i class="fa fa-lock" aria-hidden="true"></i>
+                        </span>
+                    </div>
+
+                    <!-- Register Button -->
+                    <div class="container-login100-form-btn">
+                        <button class="login100-form-btn" type="submit">
+                            Înregistrare
+                        </button>
+                    </div>
+
+                    <!-- Error Handling -->
+                    {% if form.errors %}
+                    <div class="text-center p-t-12">
+                        <span class="txt1" style="color: red;">
+                            Vă rugăm să verificați erorile din formular!
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Already Have an Account Link -->
+                    <div class="text-center p-t-12">
+                        <span class="txt1">
+                            Ai deja un cont?
+                        </span>
+                        <a class="txt2" href="{% url 'main:login' %}">
+                            Conectează-te aici
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load JS Files -->
+    <script src="{% static 'vendor/jquery/jquery-3.2.1.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/popper.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.min.js' %}"></script>
+    <script src="{% static 'vendor/select2/select2.min.js' %}"></script>
+    <script src="{% static 'vendor/tilt/tilt.jquery.min.js' %}"></script>
+    <script>
+        $('.js-tilt').tilt({
+            scale: 1.1
+        })
+    </script>
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+</html>

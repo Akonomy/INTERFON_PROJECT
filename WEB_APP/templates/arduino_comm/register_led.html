@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Register LED</title>
+</head>
+<body>
+  <h1>Register a New LED</h1>
+  <form method="post">
+    {% csrf_token %}
+    <label>Device:</label>
+    <select name="device_id" required>
+      {% for dev in devices %}
+      <option value="{{ dev.id }}">{{ dev.name }}</option>
+      {% endfor %}
+    </select><br><br>
+
+    <label>LED Name:</label>
+    <input type="text" name="name" required><br><br>
+
+    <label>Pin Number:</label>
+    <input type="number" name="number" required><br><br>
+
+    <button type="submit">Save LED</button>
+  </form>
+
+  <p><a href="/leds/">Back to LED Control Page</a></p>
+</body>
+</html>

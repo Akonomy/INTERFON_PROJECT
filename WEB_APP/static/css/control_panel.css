@@ -1,0 +1,154 @@
+/* Dark theme background */
+body {
+    background-color: #1a1a1a;
+    color: #e6e6e6;
+    font-family: Arial, sans-serif;
+}
+
+/* Container styling */
+.container {
+    max-width: 800px;
+    margin: auto;
+    background: #2c2c2c;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* Header */
+h1 {
+    text-align: center;
+    font-size: 2.5em;
+    color: #00ffcc;
+    font-weight: bold;
+}
+
+/* Sensor item styling */
+.sensor-item {
+    padding: 15px;
+    background-color: #333;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.3s;
+}
+
+.sensor-item.active {
+    background-color: #005f5f;
+}
+
+.sensor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Toggle switch */
+.toggle-switch {
+    position: relative;
+    width: 50px;
+    display: inline-block;
+    text-align: left;
+}
+
+.toggle-switch input[type="checkbox"] {
+    display: none;
+}
+
+.slider {
+    position: relative;
+    background-color: #ccc;
+    width: 50px;
+    height: 24px;
+    border-radius: 24px;
+    transition: 0.4s;
+    cursor: pointer;
+}
+
+.slider::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: 0.4s;
+}
+
+input[type="checkbox"]:checked + .slider {
+    background-color: #00b3b3;
+}
+
+input[type="checkbox"]:checked + .slider::before {
+    transform: translateX(26px);
+}
+
+/* Mode Selector */
+.mode-selector {
+    margin-top: 10px;
+}
+
+/* Controls */
+.controls {
+    margin-top: 10px;
+}
+
+.digital-controls, .analog-controls {
+    display: none;
+}
+
+.digital-controls.active, .analog-controls.active {
+    display: block;
+}
+
+/* Input fields and select dropdown styling */
+input[type="text"], select {
+    background-color: #2c2c2c;
+    color: #e6e6e6;
+    border: 1px solid #444;
+    border-radius: 5px;
+    padding: 5px 10px;
+    width: 120px;
+    margin-left: 10px;
+}
+
+input[type="text"]:focus, select:focus {
+    outline: none;
+    border-color: #00ffcc;
+}
+
+/* Sensor value display */
+.sensor-value-display {
+    margin-top: 10px;
+}
+
+.sensor-value-display p {
+    margin: 0;
+}
+
+/* Styled button */
+.btn {
+    background-color: #005f5f;
+    color: #e6e6e6;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn:hover {
+    background-color: #00b3b3;
+}
+
+.btn-secondary {
+    background-color: #444;
+    color: #e6e6e6;
+}
+
+.btn-secondary:hover {
+    background-color: #555;
+}

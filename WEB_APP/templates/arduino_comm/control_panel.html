@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arduino Control Panel</title>
+    {% load static %}
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/control_panel.css' %}">
+    <script src="{% static 'vendor/jquery/jquery-3.2.1.min.js' %}"></script>
+</head>
+<body>
+<div class="container my-4">
+    <h1>Arduino Control Panel</h1>
+    <div id="sensor-info">
+        <h3>Sensor Status</h3>
+        <div id="sensor-list">
+            {% for sensor in device_status %}
+                <div class="sensor-item {% if sensor.active %}active{% endif %}" id="sensor-{{ sensor.id }}">
+                    <div class="sensor-header">
+                        <p><strong>{{ sensor.name }}</strong></p>
+                        <!-- Active Toggle Switch -->
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="active-{{ sensor.id }}" class="sensor-active-toggle" data-id="{{ sensor.id }}" {% if sensor.active %}checked{% endif %}>
+                            <label class="slider" for="active-{{ sensor.id }}"></label>
+                        </div>
+                    </div>
+
+                    <!-- Sensor Type and Mode -->
+                    <div class="mode-selector">
+                        <label for="type-{{ sensor.id }}">Type:</label>
+                        <select id="type-{{ sensor.id }}" class="sensor-type-select" data-id="{{ sensor.id }}">
+                            <option value="input" {% if sensor.type == "input" %}selected{% endif %}>Input</option>
+                            <option value="output" {% if sensor.type == "output" %}selected{% endif %}>Output</option>
+                        </select>
+
+                        {% if sensor.type == "output" %}
+                            <label for="mode-{{ sensor.id }}">Mode:</label>
+                            <select id="mode-{{ sensor.id }}" class="sensor-mode-select" data-id="{{ sensor.id }}">
+                                <option value="digital" {% if sensor.mode == "digital" %}selected{% endif %}>Digital</option>
+                                <option value="analog" {% if sensor.mode == "analog" %}selected{% endif %}>Analog</option>
+                            </select>
+                        {% endif %}
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="controls">
+                        {% if sensor.type == "output" %}
+                            <!-- Digital Control -->
+                            <div id="{{ sensor.id }}-digital-controls" class="digital-controls {% if sensor.mode == "digital" %}active{% endif %}">
+                                <button class="btn btn-secondary" onclick="sendDigitalCommand('{{ sensor.id }}', 'high')">High</button>
+                                <button class="btn btn-secondary" onclick="sendDigitalCommand('{{ sensor.id }}', 'low')">Low</button>
+                            </div>
+
+                            <!-- Analog Control -->
+                            <div id="{{ sensor.id }}-analog-controls" class="analog-controls {% if sensor.mode == "analog" %}active{% endif %}">
+                                <input type="range" id="range-{{ sensor.id }}" min="0" max="255" value="{{ sensor.value }}" oninput="sendAnalogValue('{{ sensor.id }}', this.value)">
+                                <span id="{{ sensor.id }}-value">{{ sensor.value }}</span>
+                            </div>
+                        {% else %}
+                            <!-- Input Sensor Value Display -->
+                            <div class="sensor-value-display">
+                                {% if sensor.mode == "digital" %}
+                                    <p>Value: <span id="{{ sensor.id }}-value">
+    {% if sensor.value %}
+        High
+    {% else %}
+        Low
+    {% endif %}
+</span></p>
+
+                                {% else %}
+                                    <p>Value: <span id="{{ sensor.id }}-value">{{ sensor.value }}</span></p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Sensor Name and Save Button -->
+                    <div class="sensor-settings mt-2">
+                        <label for="name-{{ sensor.id }}">Name:</label>
+                        <input type="text" id="name-{{ sensor.id }}" value="{{ sensor.name }}" class="sensor-name-input" data-id="{{ sensor.id }}">
+                        <!-- Individual Save Button -->
+                        <button class="btn btn-primary save-sensor-button mt-2" data-id="{{ sensor.id }}">Save</button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<button id="resetSensorsButton">Reset Sensors</button>
+
+
+
+<script>
+
+
+
+        document.getElementById('resetSensorsButton').addEventListener('click', function () {
+        if (confirm("Are you sure you want to reset all sensors?")) {
+            fetch("{% url 'arduino_comm:reset_sensors' %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    location.reload();  // Refresh the page to reflect changes
+                } else {
+                    alert("Error: " + data.error);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    });
+
+
+
+
+// Toggle sensor active status and update box color
+$(".sensor-active-toggle").on("change", function() {
+    const sensorId = $(this).data("id");
+    const isActive = $(this).is(":checked");
+    const sensorItem = $("#sensor-" + sensorId);
+
+    // Update active class for UI
+    if (isActive) {
+        sensorItem.addClass("active");
+    } else {
+        sensorItem.removeClass("active");
+    }
+
+    // Immediately save active status to server
+    saveSensorData(sensorId, { active: isActive });
+});
+
+// Mode selection change
+$(".sensor-mode-select").on("change", function() {
+    const sensorId = $(this).data("id");
+    const mode = $(this).val();
+
+    // Show relevant controls
+    const digitalControls = $("#" + sensorId + "-digital-controls");
+    const analogControls = $("#" + sensorId + "-analog-controls");
+    if (mode == "digital") {
+        digitalControls.addClass("active");
+        analogControls.removeClass("active");
+    } else {
+        analogControls.addClass("active");
+        digitalControls.removeClass("active");
+    }
+
+    // Save mode change immediately
+    saveSensorData(sensorId, { mode: mode });
+});
+
+// Type selection change
+$(".sensor-type-select").on("change", function() {
+    const sensorId = $(this).data("id");
+    const type = $(this).val();
+
+    const modeSelector = $("#mode-" + sensorId).closest(".mode-selector");
+    const controls = $("#sensor-" + sensorId + " .controls");
+    const valueDisplay = $("#sensor-" + sensorId + " .sensor-value-display");
+
+    if (type == "input") {
+        modeSelector.hide();
+        controls.hide();
+        valueDisplay.show();
+    } else if (type == "output") {
+        modeSelector.show();
+        controls.show();
+        valueDisplay.hide();
+    }
+
+    // Save type change immediately
+    saveSensorData(sensorId, { type: type });
+});
+
+// Capture digital commands (high/low)
+function sendDigitalCommand(sensorId, status) {
+    // Set button as active
+    $("#" + sensorId + "-digital-controls .btn-secondary").removeClass("active");
+    $("#" + sensorId + "-digital-controls .btn-secondary:contains(" + status + ")").addClass("active");
+
+    // Save high/low status immediately
+    saveSensorData(sensorId, { status: status });
+}
+
+// Capture analog value changes
+function sendAnalogValue(sensorId, value) {
+    $("#" + sensorId + "-value").text(value); // Display value
+    saveSensorData(sensorId, { value: value }); // Save value immediately
+}
+
+// Save name input changes immediately
+$(".sensor-name-input").on("change", function() {
+    const sensorId = $(this).data("id");
+    const name = $(this).val();
+    saveSensorData(sensorId, { name: name });
+});
+
+// General function to send data updates to server
+function saveSensorData(sensorId, data) {
+    data.sensor_id = sensorId; // Ensure sensor ID is included
+    $.ajax({
+        url: "{% url 'arduino_comm:save_sensors' %}",
+        type: "POST",
+        data: JSON.stringify({ sensors: [data] }), // Send as array
+        contentType: "application/json",
+        success: function(response) {
+            console.log("Sensor data updated:", response);
+        },
+        error: function() {
+            console.error("Failed to update sensor data for sensor", sensorId);
+        }
+    });
+}
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Tablou de Bord</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% load static %}
+    <link rel="icon" type="image/png" href="{% static 'images/icons/favicon.ico' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'fonts/font-awesome-4.7.0/css/font-awesome.min.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/util.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/dashboard.css' %}">
+</head>
+<body class="dashboard-body">
+    <div class="container-fluid dashboard-container">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-4 col-lg-2 d-md-block sidebar sidebar-navigation">
+                <div class="sidebar-sticky">
+                    <h4 class="text-center py-4 sidebar-title">Tablou de Bord</h4>
+                    <ul class="nav flex-column sidebar-menu">
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'main:dashboard' %}">
+                                <i class="fa fa-home"></i> Acasă
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <a  class="nav-link active menu-link"href="{% url 'main:profile' %}">
+                                <i class="fa fa-user"></i> Profil
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'arduino_comm:active_sensors_page' %}">
+                                <i class="fa fa-cog"></i> Setări
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <a class="nav-link menu-link" href="{% url 'main:logout' %}">
+                                <i class="fa fa-sign-out"></i> Deconectare
+                            </a>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <h5 class="text-center">Stare Cont</h5>
+                            <p class="text-15left"><strong>Abonament:</strong> Activ</p>
+                            <p class="text-15left"><strong>Ultima Conectare:</strong> Nov. 20, 2024, 7:17 p.m.</p>
+                            <p class="text-15left"><strong>Email:</strong> test@email.com</p>
+                        </li>
+                        <li class="nav-item menu-item">
+                            <h5 class="card-title text-center">Notificări</h5>
+                            <p class="text-15left">Rămâneți la curent</p>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 main-header">
+                    <h1 class="welcome-message">Profil Utilizator</h1>
+                </div>
+
+                <!-- Profile Content -->
+<div>
+    <div class="card shadow-sm profile-card bg-dark1">
+        <div class="card-body ">
+            
+            <p class="info-profile1"><strong>Username:</strong> {{ request.user.username }}</p>
+            <p class="info-profile1"><strong>Email:</strong> {{ request.user.email }}</p>
+            <p class="info-profile1"><strong>Data inregistrarii:</strong> {{ request.user.date_joined|date:"d-m-Y" }}</p>
+            <p class="info-profile1"><strong>Ultima Activitate:</strong> {{ request.user.last_login|date:"d-m-Y H:i:s" }}</p>
+            <p class="info-profile1"><strong>Tip cont:</strong> {{ user_type }}</p>
+            <p class="info-profile1"><strong>Telefon:</strong> {{ additional_data.phone }}</p>
+            <p class="info-profile1"><strong>Adresă:</strong> {{ additional_data.address }}</p>
+            <p class="info-profile1"><strong>Abonament:</strong> {{ additional_data.subscription }}</p>
+        </div>
+    </div>
+</div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Load JS Files -->
+    <script src="{% static 'vendor/jquery/jquery-3.2.1.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/popper.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.min.js' %}"></script>
+    <script>
+        $('.js-tilt').tilt({
+            scale: 1.1
+        });
+    </script>
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+</html>

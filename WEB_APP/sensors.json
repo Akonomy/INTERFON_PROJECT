@@ -1,0 +1,47 @@
+[
+    {
+        "sensor_id": "sensor_6",
+        "name": "TEMPERATURA",
+        "sensor_type": "input",
+        "mode": "analog",
+        "status": "off",
+        "value": 154,
+        "active": false
+    },
+    {
+        "sensor_id": "sensor_7",
+        "name": "Sensor 7",
+        "sensor_type": "input",
+        "mode": "digital",
+        "status": "off",
+        "value": 0,
+        "active": false
+    },
+    {
+        "sensor_id": "sensor_8",
+        "name": "PIN_2_ORANGE",
+        "sensor_type": "input",
+        "mode": "digital",
+        "status": "high",
+        "value": 1,
+        "active": true
+    },
+    {
+        "sensor_id": "sensor_9",
+        "name": "PIN_1_BLUE",
+        "sensor_type": "input",
+        "mode": "digital",
+        "status": "high",
+        "value": 1,
+        "active": true
+    },
+    {
+        "sensor_id": "sensor_10",
+        "name": "Sensor 10",
+        "sensor_type": "input",
+        "mode": "digital",
+        "status": "off",
+        "value": 68,
+        "active": false
+    }
+]
