@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../../Desktop/ESP32_projects"
+		},
+		{
+			"name": "ESP32_miniboard",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}

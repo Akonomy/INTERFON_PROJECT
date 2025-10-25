@@ -1,0 +1,6 @@
+#include "config.h"
+
+void config_init() {
+    pinMode(LED_PIN, OUTPUT);
+    Serial.println("Config initialized.");
+}

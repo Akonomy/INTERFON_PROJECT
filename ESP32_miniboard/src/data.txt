@@ -1,0 +1,17 @@
+#include "data.h"
+
+SensorData sensorQueue[MAX_QUEUE];
+int sensorQueueIndex = 0;
+
+AlertData alertQueue[MAX_QUEUE];
+int alertQueueIndex = 0;
+
+void enqueueSensor(SensorData data){
+    sensorQueue[sensorQueueIndex] = data;
+    sensorQueueIndex = (sensorQueueIndex + 1) % MAX_QUEUE;
+}
+
+void enqueueAlert(AlertData data){
+    alertQueue[alertQueueIndex] = data;
+    alertQueueIndex = (alertQueueIndex + 1) % MAX_QUEUE;
+}
