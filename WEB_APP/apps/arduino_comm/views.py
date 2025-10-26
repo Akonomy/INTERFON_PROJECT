@@ -6,62 +6,6 @@ import requests
 from .models import LED, DEVICE
 
 
-def led_control_page(request):
-    """
-    Displays all LEDs with controls.
-    """
-    leds = LED.objects.select_related('device').all()
-    return render(request, 'arduino_comm/testpage.html', {'leds': leds})
-
-
-@csrf_exempt
-def toggle_led(request, led_id):
-    """
-    Toggle the LED state (ON/OFF) and send command to ESP32 device.
-    """
-    led = get_object_or_404(LED, id=led_id)
-    device = led.device
-
-    # Flip LED state
-    new_state = 0 if led.state == 1 else 1
-    led.state = new_state
-    led.save()
-
-    # Try to notify the ESP32 via HTTP
-    if device.ip_address:
-        try:
-            url = f"http://{device.ip_address}/led"
-            payload = {'number': led.number, 'state': new_state}
-            response = requests.get(url, params=payload, timeout=3)
-            response.raise_for_status()
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': f"ESP32 communication failed: {e}"
-            })
-
-    return JsonResponse({
-        'success': True,
-        'new_state': new_state,
-        'message': f"LED {led.name} is now {'ON' if new_state else 'OFF'}"
-    })
-
-
-def register_led(request):
-    """
-    Simple form to add a new LED entry to the database.
-    """
-    if request.method == "POST":
-        device_id = request.POST.get("device_id")
-        name = request.POST.get("name")
-        number = request.POST.get("number")
-        device = get_object_or_404(DEVICE, id=device_id)
-        LED.objects.create(device=device, name=name, number=number)
-        return redirect('led_control_page')
-
-    devices = DEVICE.objects.all()
-    return render(request, 'arduino_comm/register_led.html', {'devices': devices})
-
 
 # views.py
 import hmac
@@ -225,3 +169,63 @@ def api_tag_check(request):
     return JsonResponse({"access_granted": bool(tag.is_allowed), "owner": tag.owner.full_name if tag.owner else None}, status=200)
 
 
+
+
+
+
+
+def led_control_page(request):
+    """
+    Displays all LEDs with controls.
+    """
+    leds = LED.objects.select_related('device').all()
+    return render(request, 'arduino_comm/testpage.html', {'leds': leds})
+
+
+@csrf_exempt
+def toggle_led(request, led_id):
+    """
+    Toggle the LED state (ON/OFF) and send command to ESP32 device.
+    """
+    led = get_object_or_404(LED, id=led_id)
+    device = led.device
+
+    # Flip LED state
+    new_state = 0 if led.state == 1 else 1
+    led.state = new_state
+    led.save()
+
+    # Try to notify the ESP32 via HTTP
+    if device.ip_address:
+        try:
+            url = f"http://{device.ip_address}/led"
+            payload = {'number': led.number, 'state': new_state}
+            response = requests.get(url, params=payload, timeout=3)
+            response.raise_for_status()
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f"ESP32 communication failed: {e}"
+            })
+
+    return JsonResponse({
+        'success': True,
+        'new_state': new_state,
+        'message': f"LED {led.name} is now {'ON' if new_state else 'OFF'}"
+    })
+
+
+def register_led(request):
+    """
+    Simple form to add a new LED entry to the database.
+    """
+    if request.method == "POST":
+        device_id = request.POST.get("device_id")
+        name = request.POST.get("name")
+        number = request.POST.get("number")
+        device = get_object_or_404(DEVICE, id=device_id)
+        LED.objects.create(device=device, name=name, number=number)
+        return redirect('led_control_page')
+
+    devices = DEVICE.objects.all()
+    return render(request, 'arduino_comm/register_led.html', {'devices': devices})
