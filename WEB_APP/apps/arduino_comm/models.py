@@ -3,6 +3,8 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from dataclasses import dataclass, field
 from bson.objectid import ObjectId
+from django.utils import timezone
+
 
 @dataclass
 class Sensor:
@@ -156,5 +158,174 @@ class AccessLog(models.Model):
         verbose_name = "Access Log"
         verbose_name_plural = "Access Logs"
         ordering = ['-timestamp']
+
+
+
+
+
+class Command(models.Model):
+    """Concrete command containing the payload that must be executed by a device."""
+
+    PARAM_VALIDATORS = [MinValueValidator(0), MaxValueValidator(65535)]
+
+    device = models.ForeignKey(
+        DEVICE,
+        on_delete=models.CASCADE,
+        related_name="commands",
+        help_text="Device that should receive this command",
+    )
+    code = models.PositiveIntegerField(help_text="Numeric command code understood by the ESP32 firmware.")
+    param1 = models.PositiveIntegerField(blank=True, null=True, validators=PARAM_VALIDATORS)
+    param2 = models.PositiveIntegerField(blank=True, null=True, validators=PARAM_VALIDATORS)
+    param3 = models.PositiveIntegerField(blank=True, null=True, validators=PARAM_VALIDATORS)
+    param4 = models.PositiveIntegerField(blank=True, null=True, validators=PARAM_VALIDATORS)
+    note = models.CharField(max_length=255, blank=True, help_text="Optional human readable description of the command.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        params = ",".join(
+            str(p)
+            for p in [self.param1, self.param2, self.param3, self.param4]
+            if p is not None
+        )
+        params_display = f" [{params}]" if params else ""
+        return f"{self.device.name} :: {self.code}{params_display}"
+
+    @property
+    def is_emergency(self) -> bool:
+        return self.code >= 9000
+
+    def as_uint16_tuple(self):
+        """Return the command encoded as a tuple of five uint16 values."""
+
+        def _sanitize(value):
+            return int(value) if value is not None else 0
+
+        return (
+            _sanitize(self.code),
+            _sanitize(self.param1),
+            _sanitize(self.param2),
+            _sanitize(self.param3),
+            _sanitize(self.param4),
+        )
+
+
+class CommandQueueQuerySet(models.QuerySet):
+    ACTIVE_STATUSES = ("queued", "delivered")
+
+    def active(self):
+        return self.filter(status__in=self.ACTIVE_STATUSES)
+
+    def for_device(self, device):
+        return self.filter(device=device)
+
+
+class CommandQueue(models.Model):
+    """Queue entry that determines when and how a command is delivered to a device."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        DELIVERED = "delivered", "Delivered"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        EXPIRED = "expired", "Expired"
+        CANCELLED = "cancelled", "Cancelled"
+
+    command = models.OneToOneField(
+        Command,
+        on_delete=models.CASCADE,
+        related_name="queue_entry",
+    )
+    device = models.ForeignKey(
+        DEVICE,
+        on_delete=models.CASCADE,
+        related_name="command_queue",
+    )
+    is_emergency = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.QUEUED,
+    )
+    expires_at = models.DateTimeField(help_text="When the command should automatically expire.")
+    enqueued_at = models.DateTimeField(auto_now_add=True)
+    delivered_at = models.DateTimeField(blank=True, null=True)
+    acknowledged_at = models.DateTimeField(blank=True, null=True)
+    metadata = models.JSONField(blank=True, null=True)
+
+    objects = CommandQueueQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-is_emergency", "enqueued_at"]
+
+    def save(self, *args, **kwargs):
+        if self.command and self.is_emergency is False:
+            self.is_emergency = self.command.is_emergency
+        if self.device_id is None and self.command_id:
+            self.device = self.command.device
+        super().save(*args, **kwargs)
+
+    def mark_delivered(self):
+        if self.status != self.Status.DELIVERED:
+            self.status = self.Status.DELIVERED
+            self.delivered_at = timezone.now()
+            self.save(update_fields=["status", "delivered_at"])
+
+    def acknowledge(self):
+        self.status = self.Status.ACKNOWLEDGED
+        now = timezone.now()
+        self.acknowledged_at = now
+        if not self.delivered_at:
+            self.delivered_at = now
+        self.save(update_fields=["status", "acknowledged_at", "delivered_at"])
+
+    def mark_expired(self):
+        if self.status not in {self.Status.ACKNOWLEDGED, self.Status.CANCELLED, self.Status.EXPIRED}:
+            self.status = self.Status.EXPIRED
+            self.acknowledged_at = timezone.now()
+            self.save(update_fields=["status", "acknowledged_at"])
+            CommandLog.objects.create(
+                device=self.device,
+                command=self.command,
+                status=self.Status.EXPIRED,
+                details="Command expired before being acknowledged.",
+            )
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at <= timezone.now()
+
+    @classmethod
+    def expire_overdue_for_device(cls, device):
+        for entry in cls.objects.for_device(device).filter(
+            status__in=[cls.Status.QUEUED, cls.Status.DELIVERED],
+            expires_at__lt=timezone.now(),
+        ).select_related("command"):
+            entry.mark_expired()
+
+
+class CommandLog(models.Model):
+    """Audit trail of command execution lifecycle."""
+
+    device = models.ForeignKey(DEVICE, on_delete=models.SET_NULL, null=True, blank=True)
+    command = models.ForeignKey(Command, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=32)
+    details = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    extra = models.JSONField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        device_name = self.device.name if self.device else "unknown"
+        return f"[{self.created_at:%Y-%m-%d %H:%M:%S}] {device_name} -> {self.status}"
+
+
+
+
 
 
