@@ -27,4 +27,7 @@ void setup() {
 
 void loop() {
   // One-shot, ca viața la sesiune
+
+    CommandResult cmd = pollCommand();
+    delay(2500);
 }

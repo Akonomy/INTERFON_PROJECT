@@ -1,0 +1,13 @@
+
+
+{% block content %}
+  <h1>Send Command to ESP32 Device</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Send Command</button>
+  </form>
+  {% for message in messages %}
+    <div class="message {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endblock %}

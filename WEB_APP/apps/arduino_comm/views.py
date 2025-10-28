@@ -494,6 +494,10 @@ class SendCommandForm(forms.Form):
     param4 = forms.IntegerField(label="Param 4", required=False)
     expires_in = forms.IntegerField(label="Expires in (s)", initial=60, min_value=1)
 
+from django.contrib import messages
+from django.test import RequestFactory
+import json
+
 def web_send_command(request):
     if request.method == "POST":
         form = SendCommandForm(request.POST)
@@ -508,27 +512,43 @@ def web_send_command(request):
             ]
             expires_in = form.cleaned_data['expires_in']
 
-            # Folosim internal API direct
-            data = {
+            # Construim payload pentru internal API
+            payload = {
                 "device": device.id,
                 "code": code,
                 "params": params,
                 "expires_in": expires_in,
-                "note": f"Web send by user {request.user.username if request.user.is_authenticated else 'anonymous'}"
+                "note": f"Web send by user {request.user.username}"
+                if request.user.is_authenticated else
+                "Web send anonymous",
             }
-            from django.test import Client
-            c = Client()
-            # Autentificat ca intern? Dacă nu, folosim token GET
-            url = reverse('internal_enqueue_command') + f"?token={INTERNAL_TOKEN}"
-            resp = c.post(url, data=json.dumps(data), content_type="application/json")
-            if resp.status_code == 200:
-                messages.success(request, f"Command queued successfully: {resp.json().get('queue_id')}")
+
+            # Simulare request intern
+            rf = RequestFactory()
+            fake_req = rf.post(
+                "/fake-internal/",
+                data=json.dumps(payload),
+                content_type="application/json"
+            )
+            fake_req.META['REMOTE_ADDR'] = '127.0.0.1'
+
+            resp = internal_enqueue_command(fake_req)
+
+            result = json.loads(resp.content.decode())
+
+            if resp.status_code == 200 and result.get("status") == "ok":
+                queue_id = result.get("queue_id")
+                messages.success(request, f"Command queued successfully (ID: {queue_id})")
             else:
-                messages.error(request, f"Failed to queue command: {resp.status_code} {resp.json()}")
-            return redirect('web_send_command')
+                messages.error(request, f"Failed: {result}")
+
+
+
     else:
         form = SendCommandForm()
+
     return render(request, 'arduino_comm/send_command.html', {'form': form})
+
 
 
 

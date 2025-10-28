@@ -6,6 +6,9 @@
 #include "mbedtls/md.h"
 #include <time.h>
 
+
+
+
 static const String BASE_URL = "http://akonomy.local:8000";
 static const String API_KEY = "f3109dd8c54f3ab0798c6b79756e404ed2ee350ee4b1cd9c2a7f4be40c59c57e";
 static String sessionToken = "";
@@ -28,6 +31,162 @@ static String computeHMAC(String key, String message) {
   }
   return String(hex_result);
 }
+
+CommandResult pollCommand() {
+  CommandResult result;
+  if (sessionToken == "") {
+    Serial.println("⚠️ No session token available.");
+    return result;
+  }
+
+  long ts = time(nullptr);
+  if (ts == 0) {
+    Serial.println("⚠️ Invalid timestamp.");
+    return result;
+  }
+
+  String canonical = String(DEVICE_ID) + "|" + String(ts);
+  String hmac = computeHMAC(API_KEY, canonical);
+
+  HTTPClient http;
+  http.begin(BASE_URL + "/api/commands/poll/");
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<256> body;
+  body["device"] = DEVICE_ID;
+  body["timestamp"] = ts;
+  body["signature"] = hmac;
+  body["limit"] = 1;
+
+  String payload;
+  serializeJson(body, payload);
+
+  int statusCode = http.POST(payload);
+  String response = http.getString();
+  http.end();
+
+  if (statusCode != 200) {
+    Serial.println("❌ Poll failed with status " + String(statusCode));
+    return result;
+  }
+
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, response)) {
+    Serial.println("❌ Failed to parse poll JSON");
+    return result;
+  }
+
+  JsonArray commands = doc["commands"];
+  if (commands.size() == 0) {
+    Serial.println("✅ No command available.");
+    return result;
+  }
+
+  JsonObject cmd = commands[0];
+  result.hasCommand = true;
+  result.queue_id = cmd["queue_id"] | 0;
+  result.code = cmd["code"] | 0;
+
+  JsonArray params = cmd["params"];
+  for (int i = 0; i < 4 && i < params.size(); i++) {
+    result.params[i] = params[i] | 0;
+  }
+
+  Serial.println("\n📦 Command received:");
+  Serial.println("  Queue ID: " + String(result.queue_id));
+  Serial.println("  Code    : " + String(result.code));
+  Serial.print("  Params  : ");
+  for (int i = 0; i < 4; i++) {
+    Serial.print(result.params[i]);
+    if (i < 3) Serial.print(", ");
+  }
+  Serial.println();
+
+  // ✅ AUTO-ACKNOWLEDGE
+  {
+    long ts_ack = time(nullptr);
+    String statusTxt = "acknowledged";
+    String canonicalAck = String(DEVICE_ID) + "|" + String(result.queue_id) + "|" + statusTxt + "|" + String(ts_ack);
+    String sigAck = computeHMAC(API_KEY, canonicalAck);
+
+    HTTPClient ack;
+    ack.begin(BASE_URL + "/api/commands/ack/");
+    ack.addHeader("Content-Type", "application/json");
+
+    StaticJsonDocument<256> ackBody;
+    ackBody["device"] = DEVICE_ID;
+    ackBody["queue_id"] = result.queue_id;
+    ackBody["timestamp"] = ts_ack;
+    ackBody["signature"] = sigAck;
+    ackBody["status"] = statusTxt;
+    ackBody["detail"] = "Auto acknowledgment";
+
+    String ackPayload;
+    serializeJson(ackBody, ackPayload);
+
+    int ackCode = ack.POST(ackPayload);
+    String ackResponse = ack.getString();
+    ack.end();
+
+    if (ackCode == 200) {
+      Serial.println("✅ ACK Sent! queue_id=" + String(result.queue_id));
+    } else {
+      Serial.println("❌ ACK failed: " + String(ackCode));
+      Serial.println("Response: " + ackResponse);
+    }
+  }
+
+  return result;
+}
+
+
+
+void acknowledgeCommand(int queue_id) {
+  if (sessionToken == "") {
+    Serial.println("⚠️ No session token available for acknowledgment.");
+    return;
+  }
+
+  long ts = time(nullptr);
+  if (ts == 0) {
+    Serial.println("⚠️ Invalid timestamp for acknowledgment.");
+    return;
+  }
+
+  String status = "acknowledged";
+  String canonical = String(DEVICE_ID) + "|" + String(queue_id) + "|" + status + "|" + String(ts);
+  String hmac = computeHMAC(API_KEY, canonical);
+
+  HTTPClient http;
+  http.begin(BASE_URL + "/api/commands/ack/");
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<256> body;
+  body["device"] = DEVICE_ID;
+  body["queue_id"] = queue_id;
+  body["timestamp"] = ts;
+  body["signature"] = hmac;
+  body["status"] = status;
+  body["detail"] = "Executed successfully";
+
+  String payload;
+  serializeJson(body, payload);
+
+  int code = http.POST(payload);
+  String response = http.getString();
+  http.end();
+
+  if (code == 200) {
+    Serial.println("✅ Command acknowledged: queue_id=" + String(queue_id));
+  } else {
+    Serial.println("❌ Failed to acknowledge command. Code: " + String(code));
+    Serial.println("Response: " + response);
+  }
+}
+
+
+
+
 
 void connectWiFi(const char* ssid, const char* password) {
   WiFi.begin(ssid, password);

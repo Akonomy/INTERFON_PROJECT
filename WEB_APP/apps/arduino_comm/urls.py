@@ -1,6 +1,15 @@
 from django.urls import path
 from . import views
 
+
+
+from .views import internal_enqueue_command
+
+
+
+
+
+
 app_name = 'arduino_comm'
 
 urlpatterns = [
@@ -16,9 +25,10 @@ urlpatterns = [
 
     path('api/commands/poll/', views.public_poll_commands, name='public_poll_commands'),
     path('api/commands/ack/', views.public_acknowledge_command, name='public_acknowledge_command'),
+
     path('api/internal/commands/enqueue/', views.internal_enqueue_command, name='internal_enqueue_command'),
 
-     path('web/send_command/', views.web_send_command, name='web_send_command'),
+     path('sendcommand/', views.web_send_command, name='web_send_command'),
 ]
 
 
