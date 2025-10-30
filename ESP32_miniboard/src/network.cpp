@@ -419,5 +419,53 @@ void logSensorEvent(uint8_t code, const String& sensorName, const String& messag
   }
 }
 
+void UPDATE_SENSOR(const String& id_sensor,
+                   float value_int,
+                   const String& value_text,
+                   const String& status) {
+  if (sessionToken == "") {
+    Serial.println("⚠️ No session token. Sensor update skipped.");
+    return;
+  }
+
+  StaticJsonDocument<256> json;
+  json["device_id"] = DEVICE_ID;
+  json["id_sensor"] = id_sensor;
+  json["value_int"] = value_int;
+  json["value_text"] = value_text;
+  json["status"] = status;
+
+  String payload;
+  serializeJson(json, payload);
+
+  sendData("/api/sensor/update/", payload);
+  Serial.println("📤 Sensor update sent → " + id_sensor + ": " + status);
+}
 
 
+
+// ---------------------------------------------------------------------------
+//  LOG_ACCESS — send access log entry (RFID or similar) to Django API
+// ---------------------------------------------------------------------------
+void LOG_ACCESS(const String& tag_uid,
+                const String& esp_timestamp,
+                const String& result,
+                const String& details) {
+  if (sessionToken == "") {
+    Serial.println("⚠️ No session token. Access log skipped.");
+    return;
+  }
+
+  StaticJsonDocument<256> json;
+  json["device_id"] = DEVICE_ID;
+  json["tag_uid"] = tag_uid;
+  json["esp_timestamp"] = esp_timestamp;
+  json["result"] = result;
+  json["details"] = details;
+
+  String payload;
+  serializeJson(json, payload);
+
+  sendData("/api/accesslog/", payload);
+  Serial.println("📥 Access log sent → " + tag_uid + ": " + result);
+}

@@ -31,7 +31,10 @@ void setup() {
   logSensorEvent(7, "diagnostics", "System entering idle mode", 2); // debug
 
 
+  UPDATE_SENSOR("TEST_1", 1, "Door Open", "OK");
 
+  // Example: log RFID access attempt
+  LOG_ACCESS("A1B2C3D4", "2025-10-30 21:30:00", "granted", "Access granted to John");
 
 }
 

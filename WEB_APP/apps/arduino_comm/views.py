@@ -1,41 +1,46 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import requests
-
-from .models import LED, DEVICE
-
-
-
-# views.py
-import hmac
-import hashlib
-import json
-import secrets
+# ─────────────────────────────────────────────────────────────────────────────
+# Standard Library Imports
+# ─────────────────────────────────────────────────────────────────────────────
 import base64
-from datetime import timedelta
-import struct
+import hashlib
+import hmac
 import json
 import logging
-from django.views.decorators.csrf import csrf_exempt
-from django.core.cache import cache
-from django.http import JsonResponse
-from django.utils import timezone as dj_tz
+import secrets
+import struct
+from datetime import timedelta
 from ipaddress import ip_address, ip_network
 
-from django.db import connection, transaction
-
-from .models import LED, DEVICE, TAG, Command, CommandQueue, CommandLog
-from django.http import HttpResponse
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Django Core Imports
+# ─────────────────────────────────────────────────────────────────────────────
 from django.conf import settings
+from django.core.cache import cache
+from django.db import connection, transaction
+from django.http import JsonResponse, HttpResponse
+from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone as dj_tz
+from django.views.decorators.csrf import csrf_exempt
+from django import forms
+# ─────────────────────────────────────────────────────────────────────────────
+# Third-Party Imports
+# ─────────────────────────────────────────────────────────────────────────────
+import requests
 
-
-
-
-from .models import SyslogEntry
-
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Local App Imports
+# ─────────────────────────────────────────────────────────────────────────────
+from .models import (
+    DEVICE,
+    TAG,
+    SENSOR,
+    PERSONAL,
+    AccessLog,
+    SyslogEntry,
+    Command,
+    CommandQueue,
+    CommandLog,
+)
 
 
 
@@ -597,60 +602,175 @@ def syslog_api_receiver(request):
     return JsonResponse({"error": "Only POST allowed."}, status=405)
 
 
+# views.py
+@csrf_exempt
+def device_status_update(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    session_token = request.headers.get("X-Session-Token")
+    session_info = cache.get(f"session:{session_token}")
+    if not session_info:
+        return JsonResponse({"error": "Invalid or expired session"}, status=401)
+
+    try:
+        data = json.loads(request.body.decode())
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    device = DEVICE.objects.get(id=session_info["device_id"])
+    now = dj_tz.now()
+
+    # Update device info
+    device.last_heartbeat = now
+    device.wifi_signal_strength = data.get("wifi_rssi", device.wifi_signal_strength)
+    device.ip_address = request.META.get("REMOTE_ADDR")
+    device.custom_field_1 = data.get("battery_status")
+    device.custom_field_2 = data.get("esp32_time")
+    device.save()
+
+    # Optional: update sensors
+    for sensor_data in data.get("sensors", []):
+        SENSOR.objects.update_or_create(
+            device=device,
+            number=sensor_data.get("number"),
+            defaults={
+                "name": sensor_data.get("name", f"Sensor {sensor_data.get('number')}"),
+                "value": sensor_data.get("value"),
+                "status": sensor_data.get("status", "OK"),
+            }
+        )
+
+    return JsonResponse({"status": "ok", "updated_at": now.isoformat()})
 
 
-def led_control_page(request):
-    """
-    Displays all LEDs with controls.
-    """
-    leds = LED.objects.select_related('device').all()
-    return render(request, 'arduino_comm/testpage.html', {'leds': leds})
+
+def sensor_list(request):
+    sensors = SENSOR.objects.select_related("device").all()
+    return render(request, "arduino_comm/sensor_list.html", {"sensors": sensors})
+
+
+
+
+def sensor_edit(request, sensor_id):
+    sensor = get_object_or_404(SENSOR, id=sensor_id)
+
+
+    if request.method == "POST":
+        sensor.name = request.POST.get("name", sensor.name)
+        sensor.status = request.POST.get("status", sensor.status)
+        sensor.value_int = request.POST.get("value_int", sensor.value_int)
+        sensor.value_text = request.POST.get("value_text") or None
+        sensor.save()
+        return redirect("sensor_list")
+
+
+    return render(request, "arduino_comm/sensor_edit.html", {"sensor": sensor})
+
+
+
+
+def sensor_delete(request, sensor_id):
+    sensor = get_object_or_404(SENSOR, id=sensor_id)
+    if request.method == "POST":
+        sensor.delete()
+        return redirect("arduino_comm/sensor_list")
+    return HttpResponseNotAllowed(["POST"])
+
+
+
+
+class SensorForm(forms.ModelForm):
+    class Meta:
+        model = SENSOR
+        fields = [
+            'device', 'id_sensor', 'type', 'name', 'number',
+            'status', 'value_int', 'value_text'
+        ]
+
+
+def sensor_add(request):
+    if request.method == 'POST':
+        form = SensorForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('sensor_list')
+    else:
+        form = SensorForm()
+
+    return render(request, 'arduino_comm/sensor_add.html', {'form': form})
+
+
+
+# ──────────────── ACCESS LOG VIEWS ────────────────
+def access_log_list(request):
+    logs = AccessLog.objects.select_related("device", "person", "tag").all()
+    return render(request, "arduino_comm/access_log.html", {"logs": logs})
+
 
 
 @csrf_exempt
-def toggle_led(request, led_id):
-    """
-    Toggle the LED state (ON/OFF) and send command to ESP32 device.
-    """
-    led = get_object_or_404(LED, id=led_id)
-    device = led.device
+def api_update_sensor(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
 
-    # Flip LED state
-    new_state = 0 if led.state == 1 else 1
-    led.state = new_state
-    led.save()
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    # Try to notify the ESP32 via HTTP
-    if device.ip_address:
-        try:
-            url = f"http://{device.ip_address}/led"
-            payload = {'number': led.number, 'state': new_state}
-            response = requests.get(url, params=payload, timeout=3)
-            response.raise_for_status()
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': f"ESP32 communication failed: {e}"
-            })
+    device_id = data.get("device_id")
+    id_sensor = data.get("id_sensor")
+    if not device_id or not id_sensor:
+        return JsonResponse({"error": "Missing device_id or id_sensor"}, status=400)
 
-    return JsonResponse({
-        'success': True,
-        'new_state': new_state,
-        'message': f"LED {led.name} is now {'ON' if new_state else 'OFF'}"
-    })
+    try:
+        device = DEVICE.objects.get(name=device_id)  # or use .get(id=device_id)
+    except DEVICE.DoesNotExist:
+        return JsonResponse({"error": "Unknown device"}, status=404)
+
+    sensor, _ = SENSOR.objects.get_or_create(device=device, id_sensor=id_sensor)
+
+    sensor.status = data.get("status", sensor.status)
+    sensor.value_int = data.get("value_int", sensor.value_int)
+    sensor.value_text = data.get("value_text", sensor.value_text)
+    sensor.save()
+
+    return JsonResponse({"status": "ok", "sensor_id": sensor.id_sensor})
 
 
-def register_led(request):
-    """
-    Simple form to add a new LED entry to the database.
-    """
-    if request.method == "POST":
-        device_id = request.POST.get("device_id")
-        name = request.POST.get("name")
-        number = request.POST.get("number")
-        device = get_object_or_404(DEVICE, id=device_id)
-        LED.objects.create(device=device, name=name, number=number)
-        return redirect('led_control_page')
+@csrf_exempt
+def api_log_access(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
 
-    devices = DEVICE.objects.all()
-    return render(request, 'arduino_comm/register_led.html', {'devices': devices})
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    device_id = data.get("device_id")
+    tag_uid = data.get("tag_uid")
+
+    if not device_id or not tag_uid:
+        return JsonResponse({"error": "Missing device_id or tag_uid"}, status=400)
+
+    try:
+        device = DEVICE.objects.get(name=device_id)
+    except DEVICE.DoesNotExist:
+        return JsonResponse({"error": "Unknown device"}, status=404)
+
+    tag = TAG.objects.filter(uid=tag_uid).first()
+    person = tag.owner if tag and tag.owner else None
+
+    log = AccessLog.objects.create(
+        device=device,
+        tag=tag,
+        person=person,
+        tag_uid=tag_uid,
+        esp_timestamp=data.get("esp_timestamp"),
+        result=data.get("result", "error"),
+        details=data.get("details", "")
+    )
+
+    return JsonResponse({"status": "ok", "access_log_id": log.id})

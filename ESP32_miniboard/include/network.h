@@ -5,7 +5,7 @@
 #include <Arduino.h>
 
 
-#define DEVICE_ID 1
+#define DEVICE_ID "esp_test"
 
 
 
@@ -34,6 +34,15 @@ struct CommandResult {
 };
 
 
+void UPDATE_SENSOR(const String& id_sensor,
+                   float value_int,
+                   const String& value_text,
+                   const String& status) ;
+
+void LOG_ACCESS(const String& tag_uid,
+                const String& esp_timestamp,
+                const String& result,
+                const String& details) ;
 
 
 

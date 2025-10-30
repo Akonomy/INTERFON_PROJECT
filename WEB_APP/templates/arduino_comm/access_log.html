@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Access Logs</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #eee; }
+    .granted { color: green; }
+    .denied { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Access Log</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>ESP Time</th>
+        <th>Tag UID</th>
+        <th>Person</th>
+        <th>Device</th>
+        <th>Result</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td>{{ log.server_timestamp }}</td>
+        <td>{{ log.esp_timestamp }}</td>
+        <td>{{ log.tag_uid }}</td>
+        <td>{% if log.person %}
+  {{ log.person.full_name }}
+{% else %}
+  Unknown
+{% endif %}
+</td>
+        <td>{{ log.device.name }}</td>
+        <td class="{{ log.result }}">{{ log.get_result_display }}</td>
+        <td>{{ log.details }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

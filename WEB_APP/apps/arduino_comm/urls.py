@@ -13,10 +13,19 @@ from .views import internal_enqueue_command
 app_name = 'arduino_comm'
 
 urlpatterns = [
-    path('leds/', views.led_control_page, name='led_control_page'),
-    path('leds/toggle/<int:led_id>/', views.toggle_led, name='toggle_led'),
-    path('leds/register/', views.register_led, name='register_led'),
 
+
+    path("sensor_list/", views.sensor_list, name="sensor_list"),
+    path("sensors/<int:sensor_id>/edit/", views.sensor_edit, name="sensor_edit"),
+    path("sensors/<int:sensor_id>/delete/", views.sensor_delete, name="sensor_delete"),
+    path('sensor_add/', views.sensor_add, name='sensor_add'),
+
+    path("access-logs/", views.access_log_list, name="access_log_list"),
+    path('sendcommand/', views.web_send_command, name='web_send_command'),
+
+
+    path("api/sensor/update/", views.api_update_sensor, name="api_update_sensor"),
+    path("api/accesslog/", views.api_log_access, name="api_log_access"),
 
 
     path('api/auth/challenge/', views.request_challenge, name='request_challenge'),
@@ -28,11 +37,11 @@ urlpatterns = [
 
     path('api/internal/commands/enqueue/', views.internal_enqueue_command, name='internal_enqueue_command'),
 
-     path('sendcommand/', views.web_send_command, name='web_send_command'),
 
-     path('syslog/', views.syslog_view, name='syslog_view'),
 
-     path("api/syslog/", views.syslog_api_receiver, name="syslog_api_receiver"),
+    path('syslog/', views.syslog_view, name='syslog_view'),
+
+    path("api/syslog/", views.syslog_api_receiver, name="syslog_api_receiver"),
 ]
 
 

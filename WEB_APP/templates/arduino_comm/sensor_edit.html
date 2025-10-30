@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Edit Sensor</title>
+</head>
+<body>
+  <h1>Edit Sensor</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+  </form>
+  <a href="{% url 'sensor_list' %}">Back</a>
+</body>
+</html>

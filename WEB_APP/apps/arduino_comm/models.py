@@ -6,16 +6,6 @@ from bson.objectid import ObjectId
 from django.utils import timezone
 
 
-@dataclass
-class Sensor:
-    """Representation of a Sensor document in MongoDB."""
-    id: str = field(default_factory=lambda: str(ObjectId()))  # Use MongoDB ObjectId as string
-    name: str = ""
-    type: str = "input"  # "input" or "output"
-    mode: str = "digital"  # "digital" or "analog"
-    status: str = "off"  # "on" or "off"
-    value: int = 0
-    active: bool = False
 
 
 
@@ -58,49 +48,73 @@ class DEVICE(models.Model):
         verbose_name_plural = "DEVICES"
 
 
-class LED(models.Model):
-    """
-    Represents an LED connected to a device.
-    """
-    STATE_CHOICES = [
-        (0, 'OFF'),
-        (1, 'ON'),
-    ]
-    device = models.ForeignKey(DEVICE, on_delete=models.CASCADE, related_name='leds')
-    name = models.CharField(max_length=100, help_text="Descriptive name, e.g., 'Status_Indicator_Green'")
-    number = models.PositiveIntegerField(help_text="Pin number or identifier for the LED on the device.")
-    state = models.IntegerField(choices=STATE_CHOICES, default=0, help_text="Current state of the LED (0=OFF, 1=ON).")
-    is_active = models.BooleanField(default=True, help_text="Is this LED configuration currently active?")
-
-    def __str__(self):
-        return f"{self.name} on {self.device.name} is {self.get_state_display()}"
-
-    class Meta:
-        verbose_name = "LED"
-        verbose_name_plural = "LEDs"
-        # Ensures that each LED number is unique per device
-        unique_together = ('device', 'number',)
-
-
 class SENSOR(models.Model):
-    """
-    Represents a sensor connected to a device.
-    """
-    device = models.ForeignKey(DEVICE, on_delete=models.CASCADE, related_name='sensors')
-    name = models.CharField(max_length=100, help_text="Descriptive name, e.g., 'Door_Magnetic_Switch' or 'Room_Temperature'")
-    number = models.PositiveIntegerField(help_text="Pin number or identifier for the sensor on the device.")
-    status = models.CharField(max_length=50, default="OK", help_text="Operational status of the sensor, e.g., 'OK', 'ERROR', 'OFFLINE'.")
-    value = models.FloatField(blank=True, null=True, help_text="The last read value from the sensor.")
-    last_updated = models.DateTimeField(auto_now=True)
+    class SensorType(models.TextChoices):
+        READ_ONLY = "readonly", "Read-Only"
+        SETTABLE = "settable", "Settable"
 
-    def __str__(self):
-        return f"{self.name} on {self.device.name} | Value: {self.value}"
+    device = models.ForeignKey("DEVICE", on_delete=models.CASCADE, related_name="sensors")
+
+    id_sensor = models.CharField(
+        max_length=64,
+        default="UNKNOWN_SENSOR",
+        help_text="Unique sensor ID reported by device",
+    )
+
+    type = models.CharField(
+        max_length=16,
+        choices=SensorType.choices,
+        default=SensorType.READ_ONLY,
+        help_text="Whether sensor is passive (readonly) or can be written to",
+    )
+
+    name = models.CharField(
+        max_length=100,
+        help_text="Human-readable sensor name",
+    )
+
+    number = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Optional pin number or internal reference",
+    )
+
+    status = models.CharField(
+        max_length=50,
+        default="OFFLINE",
+        help_text="Sensor health/status, e.g., OK, OFFLINE, ERROR",
+    )
+
+    value_int = models.FloatField(
+        default=-99999,
+        help_text="Primary numeric value (e.g., temperature, state)",
+    )
+
+    value_text = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Optional textual info (e.g., 'Door open', 'Charging')",
+    )
+
+    last_updated = models.DateTimeField(
+        auto_now=True,
+        help_text="When the server last received an update",
+    )
 
     class Meta:
-        verbose_name = "SENSOR"
-        verbose_name_plural = "SENSORS"
-        # Ensures that each sensor number is unique per device
-        unique_together = ('device', 'number',)
+        verbose_name = "Sensor"
+        verbose_name_plural = "Sensors"
+        unique_together = ("device", "id_sensor")
+
+    def save(self, *args, **kwargs):
+        if not self.name:
+            self.name = f"SENSOR_{self.id_sensor}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({self.device.name}) → {self.value_int}"
+
 
 
 class PERSONAL(models.Model):
@@ -141,23 +155,39 @@ class TAG(models.Model):
 
 
 class AccessLog(models.Model):
-    """
-    Logs every access attempt made with a TAG on a DEVICE.
-    """
-    device = models.ForeignKey(DEVICE, on_delete=models.PROTECT, related_name='access_logs')
-    tag = models.ForeignKey(TAG, on_delete=models.SET_NULL, null=True, blank=True, related_name='access_logs')
-    timestamp = models.DateTimeField(auto_now_add=True)
-    access_granted = models.BooleanField()
-    details = models.CharField(max_length=255, blank=True, help_text="Additional details, e.g., 'Access Denied: Tag not allowed'.")
+    class AccessResult(models.TextChoices):
+        GRANTED = "granted", "Access Granted"
+        DENIED = "denied", "Access Denied"
+        ERROR = "error", "Unknown/Error"
+
+    device = models.ForeignKey("DEVICE", on_delete=models.PROTECT, related_name="access_logs")
+    tag = models.ForeignKey("TAG", on_delete=models.SET_NULL, null=True, blank=True, related_name="access_logs")
+    person = models.ForeignKey("PERSONAL", on_delete=models.SET_NULL, null=True, blank=True)
+
+    tag_uid = models.CharField(
+    max_length=100,
+    default="UNKNOWN",
+    help_text="Raw UID of the tag used"
+    )
+    esp_timestamp = models.CharField(max_length=64, blank=True, null=True, help_text="ESP32 local timestamp (as string)")
+    server_timestamp = models.DateTimeField(auto_now_add=True)
+
+    result = models.CharField(
+        max_length=16,
+        choices=AccessResult.choices,
+        default=AccessResult.ERROR,
+    )
+
+    details = models.CharField(max_length=255, blank=True, help_text="Details like 'Tag not assigned', 'Access granted to John'")
 
     def __str__(self):
-        status = "Granted" if self.access_granted else "Denied"
-        return f"Access {status} for tag {self.tag.uid if self.tag else 'N/A'} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+        who = self.person.full_name if self.person else "Unknown"
+        return f"[{self.server_timestamp:%Y-%m-%d %H:%M:%S}] {who} @ {self.device.name} → {self.get_result_display()}"
 
     class Meta:
         verbose_name = "Access Log"
         verbose_name_plural = "Access Logs"
-        ordering = ['-timestamp']
+        ordering = ["-server_timestamp"]
 
 
 

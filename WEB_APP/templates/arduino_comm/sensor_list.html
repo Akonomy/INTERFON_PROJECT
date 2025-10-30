@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sensors</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2em;
+      background: #f9f9f9;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+
+    .readonly {
+      color: #888;
+    }
+
+    .settable {
+      color: green;
+      font-weight: bold;
+    }
+
+    .actions a {
+      margin-right: 10px;
+      text-decoration: none;
+      color: #007bff;
+    }
+
+    .actions a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sensor List</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Number</th>
+        <th>Status</th>
+        <th>Value (int)</th>
+        <th>Value (text)</th>
+        <th>Last Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sensor in sensors %}
+      <tr>
+        <td>{{ sensor.id_sensor }}</td>
+        <td>{{ sensor.name }}</td>
+        <td class="{{ sensor.type }}">{{ sensor.get_type_display }}</td>
+        <td>{{ sensor.number }}</td>
+        <td>{{ sensor.status }}</td>
+        <td>{{ sensor.value_int }}</td>
+        <td>{{ sensor.value_text }}</td>
+        <td>{{ sensor.last_updated }}</td>
+        <td class="actions">
+          <a href="{% url 'arduino_comm:sensor_edit' sensor.id %}">Edit</a>
+          <a href="{% url 'arduino_comm:sensor_delete' sensor.id %}">Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
