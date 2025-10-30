@@ -33,9 +33,13 @@ struct CommandResult {
   int params[4] = {0, 0, 0, 0};
 };
 
+
+
+
+
 // Function that polls for a command and auto-acknowledges it
 CommandResult pollCommand();
-
+void logSensorEvent(uint8_t code, const String& sensorName, const String& message, uint8_t where = 3);
 
 
 #endif

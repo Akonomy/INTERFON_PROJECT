@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>Syslog Viewer</title>
+<style>
+body { font-family: Arial, sans-serif; background-color: #f4f4f4; color: #333; }
+table { width: 100%; border-collapse: collapse; margin: 20px auto; background: white; }
+th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+th { background-color: #333; color: white; }
+.level-0 { background-color: #ff0000; color: white; }
+.level-1 { background-color: #ff4500; color: white; }
+.level-2 { background-color: #ff6347; color: white; }
+.level-3 { background-color: #ff8c00; color: white; }
+.level-4 { background-color: #ffa500; color: white; }
+.level-5 { background-color: #f0e68c; color: black; }
+.level-6 { background-color: #90ee90; color: black; }
+.level-7 { background-color: #d3d3d3; color: black; }
+</style>
+</head>
+<body>
+<h2 style="text-align: center;">Syslog Logs</h2>
+<table>
+<thead>
+<tr>
+      <th>Server Time</th>
+      <th>ESP Time</th>
+      <th>IP</th>
+      <th>Host</th>
+      <th>Facility</th>
+      <th>Priority</th>
+      <th>Tag</th>
+      <th>Message</th>
+</tr>
+</thead>
+<tbody>
+{% for log in logs %}
+<tr class="level-{{ log.priority }}">
+      <td>{{ log.timestamp }}</td>
+      <td>{{ log.device_time|default:"—" }}</td>
+      <td>{{ log.ip|default:"None" }}</td>
+      <td>{{ log.host }}</td>
+      <td>{{ log.facility }}</td>
+      <td>{{ log.get_priority_label }}</td>
+      <td>{{ log.tag }}</td>
+      <td>{{ log.message }}</td>
+</tr>
+{% empty %}
+<tr><td colspan="7" style="text-align:center;">No logs found.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</body>
+</html>

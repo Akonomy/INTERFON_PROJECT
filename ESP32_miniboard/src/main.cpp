@@ -23,6 +23,16 @@ void setup() {
 
   // (opțional) primește comenzi din coadă
   receiveQueue();
+
+
+
+   logSensorEvent(6, "system", "ESP32 boot completed", 2);     // info → syslog only
+  logSensorEvent(5, "wifi", "Wi-Fi connected successfully", 2); // notice
+  logSensorEvent(7, "diagnostics", "System entering idle mode", 2); // debug
+
+
+
+
 }
 
 void loop() {

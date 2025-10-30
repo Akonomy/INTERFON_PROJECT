@@ -326,6 +326,34 @@ class CommandLog(models.Model):
 
 
 
+LOG_LEVELS = [
+(0, 'EMERG'),
+(1, 'ALERT'),
+(2, 'CRIT'),
+(3, 'ERR'),
+(4, 'WARNING'),
+(5, 'NOTICE'),
+(6, 'INFO'),
+(7, 'DEBUG'),
+]
+
+
+class SyslogEntry(models.Model):
+    severity = models.IntegerField(default=6)
+    timestamp = models.DateTimeField(auto_now_add=True)  # ← server time
+    device_time = models.CharField(max_length=64, null=True, blank=True)  # ← ESP local time (optional)
+
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    host = models.CharField(max_length=64)
+    facility = models.CharField(max_length=64)
+    priority = models.IntegerField(choices=LOG_LEVELS)
+    tag = models.CharField(max_length=64)
+    message = models.TextField()
+
+    def get_priority_label(self):
+        return dict(LOG_LEVELS).get(self.priority, 'UNKNOWN')
+
+
 
 
 

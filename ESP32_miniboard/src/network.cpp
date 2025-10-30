@@ -7,6 +7,7 @@
 #include <time.h>
 
 
+#include <WiFiUdp.h>
 
 
 static const String BASE_URL = "http://akonomy.local:8000";
@@ -291,7 +292,7 @@ String requestData(const String& path) {
 
 void sendSyslog(const String& message) {
   String payload = "{\"log\":\"" + message + "\"}";
-  sendData("/api/log/syslog/", payload);
+  sendData("/api/syslog/", payload);
 }
 
 void syncTime() {
@@ -328,3 +329,95 @@ void connectAndCheckTag(const char* ssid, const char* password, const String& ta
     checkTag(tagUID);
   }
 }
+
+
+
+
+
+
+WiFiUDP udp;
+
+
+
+
+
+
+const char* SYSLOG_SERVER = "akonomy.local";  // ← replace with your PC's IP
+const int SYSLOG_PORT = 514;
+const char* DEVICE_NAME = "esp32-core-01";    // ← can be static or generated
+
+// Level mapping for human-readable labels
+const char* severityLabel(int code) {
+  switch (code) {
+    case 0: return "EMERG";
+    case 1: return "ALERT";
+    case 2: return "CRIT";
+    case 3: return "ERR";
+    case 4: return "WARNING";
+    case 5: return "NOTICE";
+    case 6: return "INFO";
+    case 7: return "DEBUG";
+    default: return "UNKNOWN";
+  }
+}
+
+
+
+
+void logSensorEvent(uint8_t code, const String& sensorName, const String& message, uint8_t where) {
+  code = constrain(code, 0, 7);
+  where = constrain(where, 1, 3);
+
+  time_t now = time(nullptr);
+  struct tm* t = localtime(&now);
+  char timestamp[32];
+  strftime(timestamp, sizeof(timestamp), "%b %d %H:%M:%S", t);
+
+  // Syslog formatting (for Visual Syslog)
+  int facility = 1; // user-level
+  int pri = facility * 8 + code;
+  String logLine = "<" + String(pri) + ">";
+  logLine += String(timestamp) + " ";
+  logLine += DEVICE_NAME;
+  logLine += " " + sensorName + "[42]: " + message;
+
+  // --- Send to SYSLOG (UDP) ---
+  if (where == 1 || where == 2) {
+    IPAddress syslogIP;
+    if (!WiFi.hostByName(SYSLOG_SERVER, syslogIP)) {
+      Serial.println("❌ Failed to resolve SYSLOG_SERVER hostname.");
+    } else {
+      udp.beginPacket(syslogIP, SYSLOG_PORT);
+      udp.print(logLine);
+      udp.endPacket();
+      Serial.println("📡 Sent to SYSLOG: " + logLine);
+    }
+  }
+
+  // --- Send to API ---
+  if ((where == 2 || where == 3) && sessionToken != "") {
+
+    int priority = code;  // facility (1 = user
+    char timestamp[32];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", t);
+
+    StaticJsonDocument<256> json;
+
+    json["severity"] = code;
+    json["facility"] = "user";
+    json["host"] = DEVICE_NAME;
+    json["tag"] = sensorName + "[42]";
+    json["message"] = message;
+    json["priority"] = priority;
+    json["device_time"] = String(timestamp);
+    String payload;
+    serializeJson(json, payload);
+    sendData("/api/syslog/", payload);
+    Serial.println("🌐 Sent to API: " + payload);
+  } else if ((where == 2 || where == 3)) {
+    Serial.println("⚠️ No session token. API log skipped.");
+  }
+}
+
+
+

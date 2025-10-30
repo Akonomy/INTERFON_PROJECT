@@ -30,6 +30,15 @@ from django.http import HttpResponse
 
 from django.conf import settings
 
+
+
+
+from .models import SyslogEntry
+
+
+
+
+
 # Config (tweak as needed)
 CHALLENGE_TTL = 60         # challenge expiry in seconds
 SESSION_TTL = 120          # session token TTL in seconds
@@ -548,6 +557,44 @@ def web_send_command(request):
         form = SendCommandForm()
 
     return render(request, 'arduino_comm/send_command.html', {'form': form})
+
+
+
+
+
+
+
+def syslog_view(request):
+    logs = SyslogEntry.objects.order_by('-timestamp')[:100]
+    return render(request, 'arduino_comm/syslog.html', {'logs': logs})
+
+
+
+
+
+
+@csrf_exempt
+def syslog_api_receiver(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+
+            log = SyslogEntry.objects.create(
+                severity=data.get("severity", 6),
+                facility=data.get("facility", "user"),
+                host=data.get("host", "unknown"),
+                tag=data.get("tag", "esp32"),
+                message=data.get("message", "No message"),
+                ip=request.META.get("REMOTE_ADDR"),
+                priority=data.get("priority", 14),
+                device_time=data.get("device_time"),  # ⬅ added here
+            )
+
+            return JsonResponse({"status": "ok", "id": log.id})
+        except Exception as e:
+            return JsonResponse({"status": "error", "detail": str(e)}, status=400)
+
+    return JsonResponse({"error": "Only POST allowed."}, status=405)
 
 
 
