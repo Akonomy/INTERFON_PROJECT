@@ -17,13 +17,20 @@
       {% for req in requests %}
       <tr>
         <td>{{ req.tag.uid }}</td>
-        <td>{{ req.tag.owner.full_name if req.tag.owner else "Unassigned" }}</td>
+        <td>
+  {% if req.tag.owner %}
+    {{ req.tag.owner.full_name }}
+  {% else %}
+    Unassigned
+  {% endif %}
+</td>
+
         <td>{{ req.reason }}</td>
         <td>{{ req.status }}</td>
         <td>{{ req.created_at }}</td>
         <td>
-          <a href="{% url 'approve_tag_revoke_request' req.id %}" class="btn btn-sm btn-success">Approve</a>
-          <a href="{% url 'reject_tag_revoke_request' req.id %}" class="btn btn-sm btn-danger">Reject</a>
+          <a href="{% url 'arduino_comm:approve_tag_revoke_request' req.id %}" class="btn btn-sm btn-success">Approve</a>
+          <a href="{% url 'arduino_comm:reject_tag_revoke_request' req.id %}" class="btn btn-sm btn-danger">Reject</a>
         </td>
       </tr>
       {% endfor %}

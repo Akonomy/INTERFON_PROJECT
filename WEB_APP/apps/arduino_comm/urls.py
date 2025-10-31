@@ -5,7 +5,7 @@ from . import views
 
 from .views import internal_enqueue_command
 
-
+from . import views_tags as tag_views
 
 
 
@@ -51,22 +51,28 @@ urlpatterns = [
     path("people/<int:person_id>/edit/", views.personal_edit, name="personal_edit"),
     path("people/<int:person_id>/delete/", views.personal_delete, name="personal_delete"),
 
-    # ──────── Tag Management ────────
-    path("tags/", views.tag_list, name="tag_list"),
-    path("tags/add/", views.tag_add, name="tag_add"),
-    path("tags/<int:tag_id>/edit/", views.tag_edit, name="tag_edit"),
-    path("tags/<int:tag_id>/delete/", views.tag_delete, name="tag_delete"),
-    path("tags/<int:tag_id>/allow/", views.tag_allow, name="tag_allow"),
-    path("tags/<int:tag_id>/revoke/", views.tag_revoke, name="tag_revoke"),
+ # ──────── Tag Management (New View Module) ────────
+    path("tags/", tag_views.tag_list, name="tag_list"),
+    path("tags/add/", tag_views.tag_add, name="tag_add"),
+    path("tags/<int:tag_id>/edit/", tag_views.tag_edit, name="tag_edit"),
+    path("tags/<int:tag_id>/delete/", tag_views.tag_delete, name="tag_delete"),
+    path("tags/<int:tag_id>/allow/", tag_views.tag_allow, name="tag_allow"),
+    path("tags/<int:tag_id>/revoke/", tag_views.tag_revoke, name="tag_revoke"),
 
-    # ──────── Tag API Request Queues ────────
-    path("tags/register-requests/", views.tag_register_requests, name="tag_register_requests"),
-    path("tags/revoke-requests/", views.tag_revoke_requests, name="tag_revoke_requests"),
+    path("tags/register-requests/", tag_views.tag_register_requests, name="tag_register_requests"),
+    path("tags/revoke-requests/", tag_views.tag_revoke_requests, name="tag_revoke_requests"),
 
-    # ──────── ESP32 APIs for tag register/revoke ────────
-    path("api/tag/register-request/", views.api_register_tag_request, name="api_register_tag_request"),
-    path("api/tag/revoke-request/", views.api_revoke_tag_request, name="api_revoke_tag_request"),
+    path("api/tag/register-request/", tag_views.api_register_tag_request, name="api_register_tag_request"),
+    path("api/tag/revoke-request/", tag_views.api_revoke_tag_request, name="api_revoke_tag_request"),
+
+    path("tags/register-requests/<int:request_id>/approve/", tag_views.approve_tag_register_request, name="approve_tag_register_request"),
+    path("tags/register-requests/<int:request_id>/reject/",tag_views.reject_tag_register_request, name="reject_tag_register_request"),
+
+    # Tag revoke approval/rejection
+    path("tags/revoke-requests/<int:request_id>/approve/", tag_views.approve_tag_revoke_request, name="approve_tag_revoke_request"),
+    path("tags/revoke-requests/<int:request_id>/reject/", tag_views.reject_tag_revoke_request, name="reject_tag_revoke_request"),
 
 ]
+
 
 

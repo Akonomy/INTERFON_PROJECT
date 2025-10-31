@@ -67,6 +67,7 @@ void connectWiFi(const char* ssid, const char* password) {
     Serial.print(".");
   }
   Serial.println(" connected!");
+  authenticate();
 }
 
 // -----------------------------------------------------------------------------
@@ -80,6 +81,7 @@ bool authenticate() {
   String body = "{\"key\":\"" + API_KEY + "\"}";
   int code = http.POST(body);
   String response = http.getString();
+  Serial.println("🔍 Server response: " + response);  //DEBUG PURPOSE
   http.end();
 
   StaticJsonDocument<512> doc;
@@ -435,4 +437,44 @@ void connectAndCheckTag(const char* ssid, const char* password, const String& ta
   if (authenticate()) {
     checkTag(tagUID);
   }
+}
+
+
+
+void registerTAG(const String& tag_uid, const String& notes) {
+  if (sessionToken == "") {
+    Serial.println("⚠️ No session token. Cannot register tag.");
+    return;
+  }
+
+  StaticJsonDocument<256> json;
+  json["tag_uid"] = tag_uid;
+  json["notes"] = notes;
+  json["requested_by"] = DEVICE_NAME;  // optional, shows source (ESP32 name)
+
+  String payload;
+  serializeJson(json, payload);
+  sendData("/api/tag/register-request/", payload);
+  Serial.println("📨 Tag registration requested → " + tag_uid);
+}
+
+
+// -----------------------------------------------------------------------------
+//  REVOKE TAG
+// -----------------------------------------------------------------------------
+void deleteTAG(const String& tag_uid, const String& reason) {
+  if (sessionToken == "") {
+    Serial.println("⚠️ No session token. Cannot revoke tag.");
+    return;
+  }
+
+  StaticJsonDocument<256> json;
+  json["tag_uid"] = tag_uid;
+  json["reason"] = reason;
+  json["requested_by"] = DEVICE_NAME;  // optional context
+
+  String payload;
+  serializeJson(json, payload);
+  sendData("/api/tag/revoke-request/", payload);
+  Serial.println("🗑️ Tag revoke requested → " + tag_uid);
 }

@@ -21,10 +21,12 @@
         <td>{{ req.description }}</td>
         <td>{{ req.status }}</td>
         <td>{{ req.created_at }}</td>
-        <td>
-          <a href="{% url 'approve_tag_register_request' req.id %}" class="btn btn-sm btn-success">Approve</a>
-          <a href="{% url 'reject_tag_register_request' req.id %}" class="btn btn-sm btn-danger">Reject</a>
-        </td>
+<td>
+  <a href="{% url 'arduino_comm:approve_tag_register_request' req.id %}"
+     class="btn btn-sm btn-success">Approve</a>
+  <a href="{% url 'arduino_comm:reject_tag_register_request' req.id %}"
+     class="btn btn-sm btn-danger">Reject</a>
+</td>
       </tr>
       {% endfor %}
     </tbody>

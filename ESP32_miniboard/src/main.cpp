@@ -4,22 +4,12 @@
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  connectWiFi();
 
-  // Conectare + autentificare + verificare tag
-  connectAndCheckTag();
 
   // (opțional) sincronizare timp
   syncTime();
 
-  // (opțional) trimite un log syslog-style
-  sendSyslog("ESP32 boot complete");
-
-  // (opțional) trimite niște date
-  sendData("/api/data/post/", "{\"sensor\":\"temperature\",\"value\":22.5}");
-
-  // (opțional) cere date
-  String data = requestData("/api/data/latest/");
-  Serial.println("Data received: " + data);
 
   // (opțional) primește comenzi din coadă
   receiveQueue();
@@ -36,11 +26,14 @@ void setup() {
   // Example: log RFID access attempt
   LOG_ACCESS("A1B2C3D4", "2025-10-30 21:30:00", "granted", "Access granted to John");
 
+  registerTAG("ABC123456789", "Test tag added via ESP32");
+  deleteTAG("ABC123456789", "Lost card, remove access");
+
+    checkTag("ABC123456789");
 }
 
 void loop() {
   // One-shot, ca viața la sesiune
 
-    CommandResult cmd = pollCommand();
-    delay(2500);
+
 }

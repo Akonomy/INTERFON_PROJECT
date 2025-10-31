@@ -27,15 +27,15 @@
         <td>{{ tag.is_allowed }}</td>
         <td>{{ tag.description }}</td>
         <td>
-          <a href="{% url 'tag_edit' tag.id %}" class="btn btn-sm btn-primary">Edit</a>
-          <form action="{% url 'tag_delete' tag.id %}" method="post" style="display:inline;">
+          <a href="{% url 'arduino_comm:tag_edit' tag.id %}" class="btn btn-sm btn-primary">Edit</a>
+          <form action="{% url 'arduino_comm:tag_delete' tag.id %}" method="post" style="display:inline;">
             {% csrf_token %}
             <button class="btn btn-sm btn-danger">Delete</button>
           </form>
           {% if not tag.is_allowed %}
-          <a href="{% url 'tag_allow' tag.id %}" class="btn btn-sm btn-success">Allow</a>
+          <a href="{% url 'arduino_comm:tag_allow' tag.id %}" class="btn btn-sm btn-success">Allow</a>
           {% else %}
-          <a href="{% url 'tag_revoke' tag.id %}" class="btn btn-sm btn-warning">Revoke</a>
+          <a href="{% url 'arduino_comm:tag_revoke' tag.id %}" class="btn btn-sm btn-warning">Revoke</a>
           {% endif %}
         </td>
       </tr>
