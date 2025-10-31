@@ -1,0 +1,32 @@
+{% extends "arduino_comm/TAGS/base.html" %}
+{% block title %}Tag Register Requests{% endblock %}
+{% block content %}
+  <h2>Tag Register Requests</h2>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>UID</th>
+        <th>Device</th>
+        <th>Description</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for req in requests %}
+      <tr>
+        <td>{{ req.tag_uid }}</td>
+        <td>{{ req.device.name }}</td>
+        <td>{{ req.description }}</td>
+        <td>{{ req.status }}</td>
+        <td>{{ req.created_at }}</td>
+        <td>
+          <a href="{% url 'approve_tag_register_request' req.id %}" class="btn btn-sm btn-success">Approve</a>
+          <a href="{% url 'reject_tag_register_request' req.id %}" class="btn btn-sm btn-danger">Reject</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

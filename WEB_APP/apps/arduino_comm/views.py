@@ -22,10 +22,13 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone as dj_tz
 from django.views.decorators.csrf import csrf_exempt
 from django import forms
+from django.urls import reverse
+from django.contrib import messages
 # ─────────────────────────────────────────────────────────────────────────────
 # Third-Party Imports
 # ─────────────────────────────────────────────────────────────────────────────
 import requests
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Local App Imports
@@ -447,19 +450,20 @@ def respond_challenge(request):
     canonical = f"{nonce_b64}|{challenge_ts}"
     expected = compute_hmac_hex(device_key, canonical)
 
-    if not hmac.compare_digest(expected, response_hex):
-        cache.delete(cache_key)
-        return JsonResponse({"status": "invalid", "reason": "bad_response", "garbage": random_garbage_hex()}, status=200)
-
-    # success
-    cache.delete(cache_key)
-    session_token = secrets.token_hex(24)
-    session_cache_key = f"session:{session_token}"
-    cache.set(session_cache_key, {"device_id": challenge["device_id"]}, timeout=SESSION_TTL)
-
-    return JsonResponse({"status": "ok", "session_token": session_token, "expires_in": SESSION_TTL}, status=200)
 
 
+
+# views_tag_requests.py (extending main view)
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import JsonResponse, HttpResponseNotAllowed
+from django.views.decorators.csrf import csrf_exempt
+from django import forms
+from django.utils import timezone as dj_tz
+import json
+from .models import TAG, PERSONAL, TagRegisterRequest, TagRevokeRequest
+
+# ──────────────── API VIEWS (ESP32/DEVICE) ────────────────
 @csrf_exempt
 def api_tag_check(request):
     """
@@ -495,9 +499,182 @@ def api_tag_check(request):
     return JsonResponse({"access_granted": bool(tag.is_allowed), "owner": tag.owner.full_name if tag.owner else None}, status=200)
 
 
-from django import forms
-from django.urls import reverse
-from django.contrib import messages
+
+
+
+@csrf_exempt
+def api_register_tag_request(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    session_token = request.headers.get("X-Session-Token")
+    device_id = cache.get(f"session:{session_token}", {}).get("device_id")
+    if not device_id:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    tag_uid = data.get("tag_uid")
+    description = data.get("description", "")
+    if not tag_uid:
+        return JsonResponse({"error": "Missing tag_uid"}, status=400)
+
+    req = TagRegisterRequest.objects.create(
+        device_id=device_id,
+        tag_uid=tag_uid,
+        description=description,
+        status="pending"
+    )
+    return JsonResponse({"status": "ok", "request_id": req.id})
+
+
+@csrf_exempt
+def api_revoke_tag_request(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    session_token = request.headers.get("X-Session-Token")
+    device_id = cache.get(f"session:{session_token}", {}).get("device_id")
+    if not device_id:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    tag_uid = data.get("tag_uid")
+    reason = data.get("reason", "")
+    if not tag_uid:
+        return JsonResponse({"error": "Missing tag_uid"}, status=400)
+
+    tag = TAG.objects.filter(uid=tag_uid).first()
+    if not tag:
+        return JsonResponse({"error": "Tag not found"}, status=404)
+
+    req = TagRevokeRequest.objects.create(
+        device_id=device_id,
+        tag=tag,
+        reason=reason,
+        status="pending"
+    )
+    return JsonResponse({"status": "ok", "request_id": req.id})
+
+# ──────────────── WEB VIEWS ────────────────
+
+class PersonalForm(forms.ModelForm):
+    class Meta:
+        model = PERSONAL
+        fields = ['full_name', 'email', 'notes']
+
+
+class TagForm(forms.ModelForm):
+    class Meta:
+        model = TAG
+        fields = ['uid', 'owner', 'is_allowed', 'description']
+
+
+def tag_register_requests(request):
+    requests = TagRegisterRequest.objects.select_related("tag").order_by("-created_at")[:100]
+    return render(request, "arduino_comm/TAGS/tag_register_requests.html", {"requests": requests})
+
+
+
+def tag_revoke_requests(request):
+    requests = TagRevokeRequest.objects.select_related("tag").order_by("-created_at")[:100]
+    return render(request, "arduino_comm/TAGS/tag_revoke_requests.html", {"requests": requests})
+
+def personal_list(request):
+    people = PERSONAL.objects.all()
+    return render(request, "arduino_comm/TAGS/personal_list.html", {"people": people})
+
+
+def personal_add(request):
+    if request.method == "POST":
+        form = PersonalForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("personal_list")
+    else:
+        form = PersonalForm()
+    return render(request, "arduino_comm/TAGS/personal_form.html", {"form": form})
+
+
+def personal_edit(request, person_id):
+    person = get_object_or_404(PERSONAL, id=person_id)
+    if request.method == "POST":
+        form = PersonalForm(request.POST, instance=person)
+        if form.is_valid():
+            form.save()
+            return redirect("personal_list")
+    else:
+        form = PersonalForm(instance=person)
+    return render(request, "arduino_comm/TAGS/personal_form.html", {"form": form})
+
+
+def personal_delete(request, person_id):
+    person = get_object_or_404(PERSONAL, id=person_id)
+    if request.method == "POST":
+        person.delete()
+        return redirect("personal_list")
+    return HttpResponseNotAllowed(["POST"])
+
+
+def tag_list(request):
+    tags = TAG.objects.select_related("owner").all()
+    return render(request, "arduino_comm/TAGS/tag_list.html", {"tags": tags})
+
+
+def tag_add(request):
+    if request.method == "POST":
+        form = TagForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("tag_list")
+    else:
+        form = TagForm()
+    return render(request, "arduino_comm/TAGS/tag_form.html", {"form": form})
+
+
+def tag_edit(request, tag_id):
+    tag = get_object_or_404(TAG, id=tag_id)
+    if request.method == "POST":
+        form = TagForm(request.POST, instance=tag)
+        if form.is_valid():
+            form.save()
+            return redirect("tag_list")
+    else:
+        form = TagForm(instance=tag)
+    return render(request, "arduino_comm/TAGS/tag_form.html", {"form": form})
+
+
+def tag_delete(request, tag_id):
+    tag = get_object_or_404(TAG, id=tag_id)
+    if request.method == "POST":
+        tag.delete()
+        return redirect("tag_list")
+    return HttpResponseNotAllowed(["POST"])
+
+
+def tag_allow(request, tag_id):
+    tag = get_object_or_404(TAG, id=tag_id)
+    tag.is_allowed = True
+    tag.save()
+    return redirect("tag_list")
+
+
+def tag_revoke(request, tag_id):
+    tag = get_object_or_404(TAG, id=tag_id)
+    tag.is_allowed = False
+    tag.save()
+    return redirect("tag_list")
+
+
+
+
 
 class SendCommandForm(forms.Form):
     device = forms.ModelChoiceField(queryset=DEVICE.objects.filter(is_active=True), label="Device")

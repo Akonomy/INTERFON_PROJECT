@@ -1,19 +1,28 @@
 // network.cpp
+
 #include "network.h"
 #include <WiFi.h>
+#include <WiFiUdp.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "mbedtls/md.h"
 #include <time.h>
 
-
-#include <WiFiUdp.h>
-
-
+// -----------------------------------------------------------------------------
+//  CONFIG / GLOBALS
+// -----------------------------------------------------------------------------
 static const String BASE_URL = "http://akonomy.local:8000";
 static const String API_KEY = "f3109dd8c54f3ab0798c6b79756e404ed2ee350ee4b1cd9c2a7f4be40c59c57e";
 static String sessionToken = "";
 
+WiFiUDP udp;
+const char* SYSLOG_SERVER = "akonomy.local";  // your server IP or hostname
+const int SYSLOG_PORT = 514;
+const char* DEVICE_NAME = "esp32-core-01";
+
+// -----------------------------------------------------------------------------
+//  UTILITIES
+// -----------------------------------------------------------------------------
 static String computeHMAC(String key, String message) {
   byte hmac[32];
   mbedtls_md_context_t ctx;
@@ -33,6 +42,112 @@ static String computeHMAC(String key, String message) {
   return String(hex_result);
 }
 
+const char* severityLabel(int code) {
+  switch (code) {
+    case 0: return "EMERG";
+    case 1: return "ALERT";
+    case 2: return "CRIT";
+    case 3: return "ERR";
+    case 4: return "WARNING";
+    case 5: return "NOTICE";
+    case 6: return "INFO";
+    case 7: return "DEBUG";
+    default: return "UNKNOWN";
+  }
+}
+
+// -----------------------------------------------------------------------------
+//  NETWORK / WIFI
+// -----------------------------------------------------------------------------
+void connectWiFi(const char* ssid, const char* password) {
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(" connected!");
+}
+
+// -----------------------------------------------------------------------------
+//  AUTHENTICATION
+// -----------------------------------------------------------------------------
+bool authenticate() {
+  HTTPClient http;
+  Serial.println("→ Requesting challenge...");
+  http.begin(BASE_URL + "/api/auth/challenge/");
+  http.addHeader("Content-Type", "application/json");
+  String body = "{\"key\":\"" + API_KEY + "\"}";
+  int code = http.POST(body);
+  String response = http.getString();
+  http.end();
+
+  StaticJsonDocument<512> doc;
+  deserializeJson(doc, response);
+  if (doc["status"] != "ok") {
+    Serial.println("⚠️ Challenge rejected.");
+    return false;
+  }
+
+  String nonce = doc["nonce"];
+  long ts = doc["ts"];
+  int delaySecs = doc["min_delay_seconds"] | 2;
+  String canonical = nonce + "|" + String(ts);
+
+  Serial.printf("✔️ Got nonce. Waiting %ds...\n", delaySecs);
+  delay(delaySecs * 1000);
+
+  String hmac = computeHMAC(API_KEY, canonical);
+  Serial.println("→ Sending HMAC response...");
+  http.begin(BASE_URL + "/api/auth/respond/");
+  http.addHeader("Content-Type", "application/json");
+  String rbody = "{\"key\":\"" + API_KEY + "\",\"nonce\":\"" + nonce + "\",\"response\":\"" + hmac + "\"}";
+  code = http.POST(rbody);
+  response = http.getString();
+  http.end();
+
+  deserializeJson(doc, response);
+  if (doc["status"] != "ok") {
+    Serial.println("❌ Authentication failed.");
+    return false;
+  }
+
+  sessionToken = doc["session_token"].as<String>();
+  Serial.println("✅ Auth success. Session: " + sessionToken);
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+//  API REQUEST HELPERS
+// -----------------------------------------------------------------------------
+void sendData(const String& path, const String& jsonPayload) {
+  if (sessionToken == "") return;
+  HTTPClient http;
+  http.begin(BASE_URL + path);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Session-Token", sessionToken);
+  int code = http.POST(jsonPayload);
+  String response = http.getString();
+  http.end();
+  Serial.println("→ Sent data: " + String(code));
+  Serial.println(response);
+}
+
+String requestData(const String& path) {
+  if (sessionToken == "") return "";
+  HTTPClient http;
+  http.begin(BASE_URL + path);
+  http.addHeader("X-Session-Token", sessionToken);
+  int code = http.GET();
+  String response = http.getString();
+  http.end();
+  Serial.println("→ Requested data: " + String(code));
+  return response;
+}
+
+// -----------------------------------------------------------------------------
+//  COMMANDS
+// -----------------------------------------------------------------------------
 CommandResult pollCommand() {
   CommandResult result;
   if (sessionToken == "") {
@@ -103,44 +218,10 @@ CommandResult pollCommand() {
   }
   Serial.println();
 
-  // ✅ AUTO-ACKNOWLEDGE
-  {
-    long ts_ack = time(nullptr);
-    String statusTxt = "acknowledged";
-    String canonicalAck = String(DEVICE_ID) + "|" + String(result.queue_id) + "|" + statusTxt + "|" + String(ts_ack);
-    String sigAck = computeHMAC(API_KEY, canonicalAck);
-
-    HTTPClient ack;
-    ack.begin(BASE_URL + "/api/commands/ack/");
-    ack.addHeader("Content-Type", "application/json");
-
-    StaticJsonDocument<256> ackBody;
-    ackBody["device"] = DEVICE_ID;
-    ackBody["queue_id"] = result.queue_id;
-    ackBody["timestamp"] = ts_ack;
-    ackBody["signature"] = sigAck;
-    ackBody["status"] = statusTxt;
-    ackBody["detail"] = "Auto acknowledgment";
-
-    String ackPayload;
-    serializeJson(ackBody, ackPayload);
-
-    int ackCode = ack.POST(ackPayload);
-    String ackResponse = ack.getString();
-    ack.end();
-
-    if (ackCode == 200) {
-      Serial.println("✅ ACK Sent! queue_id=" + String(result.queue_id));
-    } else {
-      Serial.println("❌ ACK failed: " + String(ackCode));
-      Serial.println("Response: " + ackResponse);
-    }
-  }
-
+  // Auto-acknowledge
+  acknowledgeCommand(result.queue_id);
   return result;
 }
-
-
 
 void acknowledgeCommand(int queue_id) {
   if (sessionToken == "") {
@@ -168,7 +249,7 @@ void acknowledgeCommand(int queue_id) {
   body["timestamp"] = ts;
   body["signature"] = hmac;
   body["status"] = status;
-  body["detail"] = "Executed successfully";
+  body["detail"] = "Auto acknowledgment";
 
   String payload;
   serializeJson(body, payload);
@@ -178,72 +259,32 @@ void acknowledgeCommand(int queue_id) {
   http.end();
 
   if (code == 200) {
-    Serial.println("✅ Command acknowledged: queue_id=" + String(queue_id));
+    Serial.println("✅ ACK Sent! queue_id=" + String(queue_id));
   } else {
-    Serial.println("❌ Failed to acknowledge command. Code: " + String(code));
+    Serial.println("❌ ACK failed: " + String(code));
     Serial.println("Response: " + response);
   }
 }
 
+void receiveQueue() {
+  String response = requestData("/api/data/queue/");
+  if (response == "") return;
 
+  StaticJsonDocument<1024> doc;
+  deserializeJson(doc, response);
+  JsonArray queue = doc["queue"];
 
-
-
-void connectWiFi(const char* ssid, const char* password) {
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  for (JsonObject item : queue) {
+    String cmd = item["command"];
+    String payload = item["payload"];
+    Serial.printf("📥 Received: %s | Payload: %s\n", cmd.c_str(), payload.c_str());
+    // TODO: handle command
   }
-  Serial.println(" connected!");
 }
 
-bool authenticate() {
-  HTTPClient http;
-  Serial.println("→ Requesting challenge...");
-  http.begin(BASE_URL + "/api/auth/challenge/");
-  http.addHeader("Content-Type", "application/json");
-  String body = "{\"key\":\"" + API_KEY + "\"}";
-  int code = http.POST(body);
-  String response = http.getString();
-  http.end();
-
-  StaticJsonDocument<512> doc;
-  deserializeJson(doc, response);
-  if (doc["status"] != "ok") {
-    Serial.println("⚠️ Challenge rejected.");
-    return false;
-  }
-
-  String nonce = doc["nonce"];
-  long ts = doc["ts"];
-  int delaySecs = doc["min_delay_seconds"] | 2;
-  String canonical = nonce + "|" + String(ts);
-
-  Serial.printf("✔️ Got nonce. Waiting %ds...\n", delaySecs);
-  delay(delaySecs * 1000);
-
-  String hmac = computeHMAC(API_KEY, canonical);
-  Serial.println("→ Sending HMAC response...");
-  http.begin(BASE_URL + "/api/auth/respond/");
-  http.addHeader("Content-Type", "application/json");
-  String rbody = "{\"key\":\"" + API_KEY + "\",\"nonce\":\"" + nonce + "\",\"response\":\"" + hmac + "\"}";
-  code = http.POST(rbody);
-  response = http.getString();
-  http.end();
-
-  deserializeJson(doc, response);
-  if (doc["status"] != "ok") {
-    Serial.println("❌ Authentication failed.");
-    return false;
-  }
-
-  sessionToken = doc["session_token"].as<String>();
-  Serial.println("✅ Auth success. Session: " + sessionToken);
-  return true;
-}
-
+// -----------------------------------------------------------------------------
+//  TAG CHECK
+// -----------------------------------------------------------------------------
 void checkTag(const String& tagUID) {
   if (sessionToken == "") return;
   HTTPClient http;
@@ -265,160 +306,9 @@ void checkTag(const String& tagUID) {
   Serial.println("Reason: " + String(reason));
 }
 
-void sendData(const String& path, const String& jsonPayload) {
-  if (sessionToken == "") return;
-  HTTPClient http;
-  http.begin(BASE_URL + path);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Session-Token", sessionToken);
-  int code = http.POST(jsonPayload);
-  String response = http.getString();
-  http.end();
-  Serial.println("→ Sent data: " + String(code));
-  Serial.println(response);
-}
-
-String requestData(const String& path) {
-  if (sessionToken == "") return "";
-  HTTPClient http;
-  http.begin(BASE_URL + path);
-  http.addHeader("X-Session-Token", sessionToken);
-  int code = http.GET();
-  String response = http.getString();
-  http.end();
-  Serial.println("→ Requested data: " + String(code));
-  return response;
-}
-
-void sendSyslog(const String& message) {
-  String payload = "{\"log\":\"" + message + "\"}";
-  sendData("/api/syslog/", payload);
-}
-
-void syncTime() {
-  configTzTime("EET-2EEST,M3.5.0/3,M10.5.0/4", "pool.ntp.org", "time.nist.gov");
-
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("❌ Failed to obtain time");
-    return;
-  }
-
-  Serial.printf("🕒 Local time: %s", asctime(&timeinfo));
-}
-
-void receiveQueue() {
-  String response = requestData("/api/data/queue/");
-  if (response == "") return;
-
-  StaticJsonDocument<1024> doc;
-  deserializeJson(doc, response);
-  JsonArray queue = doc["queue"];
-
-  for (JsonObject item : queue) {
-    String cmd = item["command"];
-    String payload = item["payload"];
-    Serial.printf("📥 Received: %s | Payload: %s\n", cmd.c_str(), payload.c_str());
-    // aici faci ceva cu comanda
-  }
-}
-
-void connectAndCheckTag(const char* ssid, const char* password, const String& tagUID) {
-  connectWiFi(ssid, password);
-  if (authenticate()) {
-    checkTag(tagUID);
-  }
-}
-
-
-
-
-
-
-WiFiUDP udp;
-
-
-
-
-
-
-const char* SYSLOG_SERVER = "akonomy.local";  // ← replace with your PC's IP
-const int SYSLOG_PORT = 514;
-const char* DEVICE_NAME = "esp32-core-01";    // ← can be static or generated
-
-// Level mapping for human-readable labels
-const char* severityLabel(int code) {
-  switch (code) {
-    case 0: return "EMERG";
-    case 1: return "ALERT";
-    case 2: return "CRIT";
-    case 3: return "ERR";
-    case 4: return "WARNING";
-    case 5: return "NOTICE";
-    case 6: return "INFO";
-    case 7: return "DEBUG";
-    default: return "UNKNOWN";
-  }
-}
-
-
-
-
-void logSensorEvent(uint8_t code, const String& sensorName, const String& message, uint8_t where) {
-  code = constrain(code, 0, 7);
-  where = constrain(where, 1, 3);
-
-  time_t now = time(nullptr);
-  struct tm* t = localtime(&now);
-  char timestamp[32];
-  strftime(timestamp, sizeof(timestamp), "%b %d %H:%M:%S", t);
-
-  // Syslog formatting (for Visual Syslog)
-  int facility = 1; // user-level
-  int pri = facility * 8 + code;
-  String logLine = "<" + String(pri) + ">";
-  logLine += String(timestamp) + " ";
-  logLine += DEVICE_NAME;
-  logLine += " " + sensorName + "[42]: " + message;
-
-  // --- Send to SYSLOG (UDP) ---
-  if (where == 1 || where == 2) {
-    IPAddress syslogIP;
-    if (!WiFi.hostByName(SYSLOG_SERVER, syslogIP)) {
-      Serial.println("❌ Failed to resolve SYSLOG_SERVER hostname.");
-    } else {
-      udp.beginPacket(syslogIP, SYSLOG_PORT);
-      udp.print(logLine);
-      udp.endPacket();
-      Serial.println("📡 Sent to SYSLOG: " + logLine);
-    }
-  }
-
-  // --- Send to API ---
-  if ((where == 2 || where == 3) && sessionToken != "") {
-
-    int priority = code;  // facility (1 = user
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", t);
-
-    StaticJsonDocument<256> json;
-
-    json["severity"] = code;
-    json["facility"] = "user";
-    json["host"] = DEVICE_NAME;
-    json["tag"] = sensorName + "[42]";
-    json["message"] = message;
-    json["priority"] = priority;
-    json["device_time"] = String(timestamp);
-    String payload;
-    serializeJson(json, payload);
-    sendData("/api/syslog/", payload);
-    Serial.println("🌐 Sent to API: " + payload);
-  } else if ((where == 2 || where == 3)) {
-    Serial.println("⚠️ No session token. API log skipped.");
-  }
-}
-
+// -----------------------------------------------------------------------------
+//  SENSORS
+// -----------------------------------------------------------------------------
 void UPDATE_SENSOR(const String& id_sensor,
                    float value_int,
                    const String& value_text,
@@ -437,16 +327,13 @@ void UPDATE_SENSOR(const String& id_sensor,
 
   String payload;
   serializeJson(json, payload);
-
   sendData("/api/sensor/update/", payload);
   Serial.println("📤 Sensor update sent → " + id_sensor + ": " + status);
 }
 
-
-
-// ---------------------------------------------------------------------------
-//  LOG_ACCESS — send access log entry (RFID or similar) to Django API
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+//  ACCESS LOG
+// -----------------------------------------------------------------------------
 void LOG_ACCESS(const String& tag_uid,
                 const String& esp_timestamp,
                 const String& result,
@@ -465,7 +352,87 @@ void LOG_ACCESS(const String& tag_uid,
 
   String payload;
   serializeJson(json, payload);
-
   sendData("/api/accesslog/", payload);
   Serial.println("📥 Access log sent → " + tag_uid + ": " + result);
+}
+
+// -----------------------------------------------------------------------------
+//  SYSLOG
+// -----------------------------------------------------------------------------
+void logSensorEvent(uint8_t code, const String& sensorName, const String& message, uint8_t where) {
+  code = constrain(code, 0, 7);
+  where = constrain(where, 1, 3);
+
+  time_t now = time(nullptr);
+  struct tm* t = localtime(&now);
+  char timestamp[32];
+  strftime(timestamp, sizeof(timestamp), "%b %d %H:%M:%S", t);
+
+  int facility = 1; // user-level
+  int pri = facility * 8 + code;
+
+  String logLine = "<" + String(pri) + ">";
+  logLine += String(timestamp) + " ";
+  logLine += DEVICE_NAME;
+  logLine += " " + sensorName + "[42]: " + message;
+
+  // Send to UDP
+  if (where == 1 || where == 2) {
+    IPAddress syslogIP;
+    if (!WiFi.hostByName(SYSLOG_SERVER, syslogIP)) {
+      Serial.println("❌ Failed to resolve SYSLOG_SERVER hostname.");
+    } else {
+      udp.beginPacket(syslogIP, SYSLOG_PORT);
+      udp.print(logLine);
+      udp.endPacket();
+      Serial.println("📡 Sent to SYSLOG: " + logLine);
+    }
+  }
+
+  // Send to API
+  if ((where == 2 || where == 3) && sessionToken != "") {
+    char isoTimestamp[32];
+    strftime(isoTimestamp, sizeof(isoTimestamp), "%Y-%m-%d %H:%M:%S", t);
+
+    StaticJsonDocument<256> json;
+    json["severity"] = code;
+    json["facility"] = "user";
+    json["host"] = DEVICE_NAME;
+    json["tag"] = sensorName + "[42]";
+    json["message"] = message;
+    json["priority"] = code;
+    json["device_time"] = String(isoTimestamp);
+
+    String payload;
+    serializeJson(json, payload);
+    sendData("/api/syslog/", payload);
+    Serial.println("🌐 Sent to API: " + payload);
+  } else if ((where == 2 || where == 3)) {
+    Serial.println("⚠️ No session token. API log skipped.");
+  }
+}
+
+// -----------------------------------------------------------------------------
+//  TIME SYNC
+// -----------------------------------------------------------------------------
+void syncTime() {
+  configTzTime("EET-2EEST,M3.5.0/3,M10.5.0/4", "pool.ntp.org", "time.nist.gov");
+
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("❌ Failed to obtain time");
+    return;
+  }
+
+  Serial.printf("🕒 Local time: %s", asctime(&timeinfo));
+}
+
+// -----------------------------------------------------------------------------
+//  COMBINED HELPER
+// -----------------------------------------------------------------------------
+void connectAndCheckTag(const char* ssid, const char* password, const String& tagUID) {
+  connectWiFi(ssid, password);
+  if (authenticate()) {
+    checkTag(tagUID);
+  }
 }

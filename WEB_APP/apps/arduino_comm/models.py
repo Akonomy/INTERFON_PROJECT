@@ -154,6 +154,70 @@ class TAG(models.Model):
         verbose_name_plural = "TAGS"
 
 
+
+
+# models.py
+
+class TagRegisterRequest(models.Model):
+    """
+    Represents a pending request to register (add) a new tag.
+    Origin: ESP32 device or Web user.
+    """
+    tag_uid = models.CharField(max_length=100, help_text="Raw UID from RFID/NFC tag")
+    device = models.ForeignKey("DEVICE", on_delete=models.SET_NULL, null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    requested_by = models.CharField(max_length=100, blank=True, null=True, help_text="Optional source info (e.g., ESP32, user)")
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),
+            ("approved", "Approved"),
+            ("rejected", "Rejected"),
+        ],
+        default="pending"
+    )
+    associated_person = models.ForeignKey("PERSONAL", on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"RegisterRequest: {self.tag_uid} ({self.status})"
+
+    class Meta:
+        verbose_name = "Tag Registration Request"
+        verbose_name_plural = "Tag Registration Requests"
+        ordering = ["-requested_at"]
+
+
+class TagRevokeRequest(models.Model):
+    """
+    Represents a pending request to revoke access for an existing tag.
+    """
+    tag = models.ForeignKey("TAG", on_delete=models.CASCADE, related_name="revoke_requests")
+    device = models.ForeignKey("DEVICE", on_delete=models.SET_NULL, null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    requested_by = models.CharField(max_length=100, blank=True, null=True)
+    reason = models.TextField(blank=True, null=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),
+            ("approved", "Approved"),
+            ("rejected", "Rejected"),
+        ],
+        default="pending"
+    )
+
+    def __str__(self):
+        return f"RevokeRequest: {self.tag.uid} ({self.status})"
+
+    class Meta:
+        verbose_name = "Tag Revoke Request"
+        verbose_name_plural = "Tag Revoke Requests"
+        ordering = ["-requested_at"]
+
+
+
+
 class AccessLog(models.Model):
     class AccessResult(models.TextChoices):
         GRANTED = "granted", "Access Granted"

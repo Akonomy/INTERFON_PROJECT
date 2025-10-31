@@ -1,0 +1,32 @@
+{% extends "arduino_comm/TAGS/base.html" %}
+{% block title %}Tag Revoke Requests{% endblock %}
+{% block content %}
+  <h2>Tag Revoke Requests</h2>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>UID</th>
+        <th>Owner</th>
+        <th>Reason</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for req in requests %}
+      <tr>
+        <td>{{ req.tag.uid }}</td>
+        <td>{{ req.tag.owner.full_name if req.tag.owner else "Unassigned" }}</td>
+        <td>{{ req.reason }}</td>
+        <td>{{ req.status }}</td>
+        <td>{{ req.created_at }}</td>
+        <td>
+          <a href="{% url 'approve_tag_revoke_request' req.id %}" class="btn btn-sm btn-success">Approve</a>
+          <a href="{% url 'reject_tag_revoke_request' req.id %}" class="btn btn-sm btn-danger">Reject</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

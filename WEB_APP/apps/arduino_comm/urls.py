@@ -42,6 +42,31 @@ urlpatterns = [
     path('syslog/', views.syslog_view, name='syslog_view'),
 
     path("api/syslog/", views.syslog_api_receiver, name="syslog_api_receiver"),
+
+
+
+     # ──────── Personal Management ────────
+    path("people/", views.personal_list, name="personal_list"),
+    path("people/add/", views.personal_add, name="personal_add"),
+    path("people/<int:person_id>/edit/", views.personal_edit, name="personal_edit"),
+    path("people/<int:person_id>/delete/", views.personal_delete, name="personal_delete"),
+
+    # ──────── Tag Management ────────
+    path("tags/", views.tag_list, name="tag_list"),
+    path("tags/add/", views.tag_add, name="tag_add"),
+    path("tags/<int:tag_id>/edit/", views.tag_edit, name="tag_edit"),
+    path("tags/<int:tag_id>/delete/", views.tag_delete, name="tag_delete"),
+    path("tags/<int:tag_id>/allow/", views.tag_allow, name="tag_allow"),
+    path("tags/<int:tag_id>/revoke/", views.tag_revoke, name="tag_revoke"),
+
+    # ──────── Tag API Request Queues ────────
+    path("tags/register-requests/", views.tag_register_requests, name="tag_register_requests"),
+    path("tags/revoke-requests/", views.tag_revoke_requests, name="tag_revoke_requests"),
+
+    # ──────── ESP32 APIs for tag register/revoke ────────
+    path("api/tag/register-request/", views.api_register_tag_request, name="api_register_tag_request"),
+    path("api/tag/revoke-request/", views.api_revoke_tag_request, name="api_revoke_tag_request"),
+
 ]
 
 

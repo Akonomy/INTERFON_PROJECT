@@ -1,0 +1,32 @@
+{% extends "arduino_comm/TAGS/base.html" %}
+{% block title %}People{% endblock %}
+{% block content %}
+  <h2>People</h2>
+  <a href="{% url 'arduino_comm:personal_add' %}" class="btn btn-success mb-2">Add Person</a>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Notes</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for person in people %}
+      <tr>
+        <td>{{ person.full_name }}</td>
+        <td>{{ person.email }}</td>
+        <td>{{ person.notes }}</td>
+        <td>
+          <a href="{% url 'arduino_comm:personal_edit' person.id %}" class="btn btn-sm btn-primary">Edit</a>
+          <form action="{% url 'arduino_comm:personal_delete' person.id %}" method="post" style="display:inline;">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
