@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include "network.h"
+#include "gpio.h"
+
 
 void setup() {
   Serial.begin(115200);
