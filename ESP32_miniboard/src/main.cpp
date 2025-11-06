@@ -1,16 +1,22 @@
 #include <Arduino.h>
 #include "network.h"
 #include "gpio.h"
+#include "keyboard.h"
+#include "oled.h"
+
 
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
   connectWiFi();
+  OLED_Init();
+  KEYBOARD_Init();
 
 
   // (opțional) sincronizare timp
   syncTime();
+    OLED_DisplayText("READY");
 
 
   // (opțional) primește comenzi din coadă
@@ -37,5 +43,19 @@ void setup() {
 void loop() {
   // One-shot, ca viața la sesiune
 
+  KEYBOARD_Update();
+  OLED_Update();  // for masking password characters etc.
 
+  if (KEYBOARD_HasNewKey()) {
+    char k = KEYBOARD_GetLastKey();
+    Serial.printf("Key Pressed: %c\n", k);
+
+    if (k == '*') {
+      OLED_DisplayPassword("", true); // reset password
+    } else {
+      static String pass = "";
+      pass += k;
+      OLED_DisplayPassword(pass);
+    }
+  }
 }
