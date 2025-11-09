@@ -1,33 +1,43 @@
+// keyboard.h
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
 
-#include <Arduino.h>
-#include "gpio.h"
+#include <stdint.h>
 
-// ===========================
-// CONFIGURATION
-// ===========================
+// === Key Types ===
+typedef enum {
+    KEY_NONE = 0,   // No key pressed
+    KEY_CHAR,       // 0-9
+    KEY_ENTER,      // #
+    KEY_CLEAR       // *
+} KeyType;
 
-// Default update rate (ms)
-#define KEYBOARD_UPDATE_RATE_MS 25
+// === Key Event Struct ===
+typedef struct {
+    KeyType type;   // Type of key event
+    char value;     // Key value (e.g., '5', '*' or '#')
+} KeyEvent;
 
-// Analog threshold for detecting key press
-#define KEYBOARD_HIGH_THRESHOLD 2500
+// === Initialization ===
+void KEYBOARD_INIT(); // Call once during setup
 
-// Keypad dimensions
-#define KEYBOARD_ROWS 4
-#define KEYBOARD_COLS 3
+// === Basic Key Reading ===
+// Reads a key, waits for release, debounced
+KeyEvent KEYBOARD_READ_KEY();
 
-// ===========================
-// PUBLIC API
-// ===========================
+// === Multi-Digit Input ===
+// Read digits until '#' or maxDigits reached
+int KEYBOARD_READ_NUMBER(int maxDigits);
 
-void KEYBOARD_Init();                 // Initialize the keypad module
-void KEYBOARD_Update();               // Call periodically (e.g., in loop)
-bool KEYBOARD_HasNewKey();            // Returns true if a new key was pressed
-char KEYBOARD_GetLastKey();           // Returns last pressed key (clears flag)
-char KEYBOARD_PeekLastKey();          // Returns last pressed key (without clearing)
-void KEYBOARD_SetUpdateRate(uint16_t rateMs);  // Change update interval
-void KEYBOARD_SetThreshold(uint16_t threshold); // Change analog threshold
+// Get current input buffer (copy into your own buffer)
+void KEYBOARD_GET_INPUT(char* buffer, int maxLen);
 
-#endif
+// Clears the input buffer (e.g., after '*')
+void KEYBOARD_CLEAR_BUFFER();
+
+// === Multi-Tap Text Input ===
+// Simulates old-style SMS input (e.g., '2' = A/B/C/2)
+// Waits for key press and cycles characters
+char KEYBOARD_READ_CHAR();
+
+#endif // KEYBOARD_H
