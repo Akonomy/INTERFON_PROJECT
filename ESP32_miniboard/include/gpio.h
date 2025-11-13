@@ -31,7 +31,8 @@
 #define TAMPER_H   104
 
 
-
+#define SDA_PIN 8
+#define SCL_PIN 9
 
 // Initialize all GPIO systems
 void GPIO_INIT();

@@ -67,6 +67,7 @@ void connectWiFi(const char* ssid, const char* password) {
     Serial.print(".");
   }
   Serial.println(" connected!");
+
   authenticate();
 }
 
@@ -115,7 +116,8 @@ bool authenticate() {
   }
 
   sessionToken = doc["session_token"].as<String>();
-  Serial.println("✅ Auth success. Session: " + sessionToken);
+  //Serial.println("✅ Auth success. Session: " + sessionToken);
+  logSensorEvent(5, "wifi", "Wi-Fi connected successfully", 2); // notice
   return true;
 }
 

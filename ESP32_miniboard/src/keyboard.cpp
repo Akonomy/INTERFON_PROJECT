@@ -31,13 +31,26 @@ void KEYBOARD_INIT() {
 }
 
 static bool waitForKeyRelease(char key) {
-    unsigned long start = millis();
-    while (millis() - start < HOLD_THRESHOLD) {
+    const unsigned long requiredHoldTime = 550;
+    unsigned long pressStart = millis();
+
+    while (true) {
         KeyEvent ev = KEYBOARD_READ_KEY();
-        if (ev.value != key)
-            return true;
+        if (ev.value != key) {
+            return false; // Released too early or wrong key
+        }
+
+        if (millis() - pressStart >= requiredHoldTime) {
+            break;
+        }
         delay(10);
     }
+
+    // Wait for key release
+    while (KEYBOARD_READ_KEY().value == key) {
+        delay(5);
+    }
+
     return true;
 }
 
@@ -104,40 +117,117 @@ void KEYBOARD_CLEAR_BUFFER() {
     memset(inputBuffer, 0, sizeof(inputBuffer));
     inputIndex = 0;
 }
-
 char KEYBOARD_READ_CHAR() {
-static const char* multiCharMap[10] = {
-    "0",       // 0
-    "1",       // 1
-    "ABC2",    // 2
-    "DEF3",    // 3
-    "GHI4",    // 4
-    "JKL5",    // 5
-    "MNO6",    // 6
-    "PQRS7",   // 7
-    "TUV8",    // 8
-    "WXYZ9"    // 9
-};
+    static const char* multiCharMap[10] = {
+        " 0",       // 0 => Space, 0
+        ".!?1",      // 1 => . ! ?
+        "ABC2",      // 2
+        "DEF3",      // 3
+        "GHI4",      // 4
+        "JKL5",      // 5
+        "MNO6",      // 6
+        "PQRS7",     // 7
+        "TUV8",      // 8
+        "WXYZ9"      // 9
+    };
 
-
-    static int charIndex = 0;
     static char lastMultiKey = '\0';
+    static int charIndex = 0;
     static unsigned long lastPressTime = 0;
 
+    KeyEvent ev;
+    unsigned long pressStart = 0;
+
     while (true) {
-        KeyEvent ev = KEYBOARD_READ_KEY();
+        ev = KEYBOARD_READ_KEY();
+
         if (ev.type == KEY_CHAR) {
+            // Start tracking the press time
+            pressStart = millis();
+
+            // Wait for key release or timeout (i.e., hold detection)
+            while (GPIO_DIGITAL_READ(ev.value) == HIGH) {
+                delay(5);
+                if (millis() - pressStart >= 600) {
+                    // Long press detected → return digit
+                    return ev.value;
+                }
+            }
+
+            // If released before threshold, handle as multi-tap
             unsigned long now = millis();
-            if (ev.value == lastMultiKey && (now - lastPressTime < 1000)) {
-                charIndex = (charIndex + 1) % strlen(multiCharMap[ev.value - '0']);
+            uint8_t keyIdx = ev.value - '0';
+            if (keyIdx > 9) continue;
+
+            if (ev.value == lastMultiKey && (now - lastPressTime < 400)) {
+                // Cycle through letters
+                charIndex++;
+                if (charIndex >= strlen(multiCharMap[keyIdx])) {
+                    charIndex = strlen(multiCharMap[keyIdx]) - 1;
+                }
             } else {
                 lastMultiKey = ev.value;
                 charIndex = 0;
             }
+
             lastPressTime = now;
-            return multiCharMap[ev.value - '0'][charIndex];
-        } else if (ev.type == KEY_ENTER || ev.type == KEY_CLEAR) {
-            return ev.value;
+
+            // Wait to finalize input (short press)
+            unsigned long confirmStart = millis();
+            while (millis() - confirmStart < 400) {
+                KeyEvent nextEv = KEYBOARD_READ_KEY();
+                if (nextEv.type == KEY_CHAR) {
+                    if (nextEv.value == ev.value) {
+                        // cycle further
+                        now = millis();
+                        charIndex++;
+                        if (charIndex >= strlen(multiCharMap[keyIdx])) {
+                            charIndex = strlen(multiCharMap[keyIdx]) - 1;
+                        }
+                        lastPressTime = now;
+                        confirmStart = millis(); // reset confirmation window
+                    } else {
+                        // Different key pressed: finalize current letter
+                        lastMultiKey = nextEv.value;
+                        return multiCharMap[keyIdx][charIndex];
+                    }
+                }
+                delay(10);
+            }
+
+            // Timed out — return current letter
+            return multiCharMap[keyIdx][charIndex];
+        }
+        else if (ev.type == KEY_ENTER || ev.type == KEY_CLEAR) {
+            return ev.value;  // '#' or '*'
+        }
+    }
+}
+
+
+
+
+
+
+
+void KEYBOARD_READ_STRING(char* buffer, int maxLen, bool stopOnEnter) {
+    memset(buffer, 0, maxLen);
+    int index = 0;
+
+    while (index < maxLen - 1) {
+        char ch = KEYBOARD_READ_CHAR();
+
+        if (ch == '#') { // Enter key
+            if (stopOnEnter) break;
+            continue;
+        } else if (ch == '*') { // Clear key
+            if (index > 0) {
+                index--;
+                buffer[index] = '\0';
+            }
+        } else {
+            buffer[index++] = ch;
+            buffer[index] = '\0';
         }
     }
 }

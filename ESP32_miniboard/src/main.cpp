@@ -3,9 +3,13 @@
 #include "gpio.h"
 #include "keyboard.h"
 #include "oled.h"
+#include "rfid.h"
 #include <Wire.h>
 
 #define MAX_INPUT_LEN 16
+
+
+
 
 char currentInput[MAX_INPUT_LEN + 1]; // +1 for null terminator
 int inputLength = 0;
@@ -18,6 +22,8 @@ void updateDisplay() {
 }
 
 
+
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -25,6 +31,7 @@ void setup() {
   GPIO_INIT();
   OLED_Init();
   KEYBOARD_INIT();
+
 
 
   // (opțional) sincronizare timp
@@ -38,7 +45,7 @@ void setup() {
 
 
    logSensorEvent(6, "system", "ESP32 boot completed", 2);     // info → syslog only
-  logSensorEvent(5, "wifi", "Wi-Fi connected successfully", 2); // notice
+
   logSensorEvent(7, "diagnostics", "System entering DEBUG mode", 2); // debug
 
 /*
@@ -58,25 +65,58 @@ void setup() {
 }
 
 void loop() {
-  KeyEvent key = KEYBOARD_READ_KEY();
+  if (inputLength >= MAX_INPUT_LEN) return; // block overrun
 
-  if (key.type == KEY_CHAR) {
-    if (inputLength < MAX_INPUT_LEN) {
-      currentInput[inputLength++] = key.value;
-      updateDisplay();
+  char ch = KEYBOARD_READ_CHAR();
+
+  if (ch == '#') {
+    currentInput[inputLength] = '\0';
+
+    if (inputLength > 0) {
+      // Send the input as a log message
+      logSensorEvent(6, "user", String(currentInput), 2); // info level, from "user"
+      Serial.println("LOG SENT:");
+      Serial.println(currentInput);
+      OLED_DisplayText("LOG SENT");
+    } else {
+      OLED_DisplayText("EMPTY INPUT");
     }
-  } else if (key.type == KEY_CLEAR) {
+
+    delay(2000);
+    memset(currentInput, 0, sizeof(currentInput));
+    inputLength = 0;
+    OLED_Clear();
+    return;
+  }
+
+  if (ch == '*') {
     if (inputLength > 0) {
       inputLength--;
       currentInput[inputLength] = '\0';
       updateDisplay();
     }
-  } else if (key.type == KEY_ENTER) {
-    OLED_DisplayText("DONE");
-    Serial.println("DONE");
-    delay(2000);
-    memset(currentInput, 0, sizeof(currentInput));
-    inputLength = 0;
-    OLED_Clear();
+    return;
   }
+
+  if (ch != '\0' && inputLength < MAX_INPUT_LEN) {
+    currentInput[inputLength++] = ch;
+    currentInput[inputLength] = '\0';
+    updateDisplay();
+  }
+
+
+
+
+
+  rfid_tag_t tag;
+  if (RFID_Read(&tag)) {
+    Serial.printf("Tag UID: %08X\n", tag.uid);
+    Serial.printf("Type: %d\n", tag.type);
+    Serial.printf("Data: %s\n", tag.data);
+    
+}
+
+
+
+
 }
