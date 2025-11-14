@@ -1,227 +1,156 @@
-#include "rfid.h"
-#include <Wire.h>
-#include <Adafruit_PN532.h>
+#include "gpio.h"
 
-// =================== CONFIG INTERN ===================
-static Adafruit_PN532 *g_nfc = nullptr;
+// ===========================
+// Hardware Config
+// ===========================
+#define DATA_PIN 7
+#define CLOCK_PIN 6
+#define LATCH_PIN 5
 
-// blocurile folosite pentru date (4..11, 8 blocuri * 16 bytes = 128)
-static const uint8_t RFID_FIRST_BLOCK = 4;
-static const uint8_t RFID_TOTAL_BLOCKS = 8;
+#define S0 0
+#define S1 1
+#define S2 3
+#define MUX_INPUT 4
 
-// =================== UTILE INTERNE ===================
-static void printHexInternal(const uint8_t *data, uint8_t len) {
-    for (uint8_t i = 0; i < len; i++) {
-        if (data[i] < 0x10) Serial.print("0");
-        Serial.print(data[i], HEX);
-        if (i < len - 1) Serial.print(":");
-    }
+// Reserved pins (for I2C or USART)
+#define RESERVED_SDA 8
+#define RESERVED_SCL 9
+#define RESERVED_UART_TX 20
+#define RESERVED_UART_RX 21
+
+// ===========================
+// Internal State
+// ===========================
+static uint8_t shiftRegState = 0x00;
+
+// ===========================
+// Helper Functions
+// ===========================
+static void updateShiftRegister() {
+  digitalWrite(LATCH_PIN, LOW);
+  for (int i = 7; i >= 0; i--) {
+    digitalWrite(CLOCK_PIN, LOW);
+    digitalWrite(DATA_PIN, (shiftRegState >> i) & 0x01);
+    digitalWrite(CLOCK_PIN, HIGH);
+  }
+  digitalWrite(LATCH_PIN, HIGH);
 }
 
-static bool writeBlock(uint8_t block, const uint8_t *data16) {
-    if (!g_nfc->mifareclassic_WriteDataBlock(block, (uint8_t *)data16)) {
-        Serial.print("❌ Eroare scriere bloc ");
-        Serial.println(block);
-        return false;
-    }
-    return true;
+static void selectMuxChannel(uint8_t ch) {
+  digitalWrite(S0, ch & 0x01);
+  digitalWrite(S1, (ch >> 1) & 0x01);
+  digitalWrite(S2, (ch >> 2) & 0x01);
+  delayMicroseconds(50);
 }
 
-static bool readBlock(uint8_t block, uint8_t *data16) {
-    if (!g_nfc->mifareclassic_ReadDataBlock(block, data16)) {
-        Serial.print("❌ Eroare citire bloc ");
-        Serial.println(block);
-        return false;
-    }
-    return true;
+// ===========================
+// Initialization
+// ===========================
+void GPIO_INIT() {
+  // Shift register pins
+  pinMode(DATA_PIN, OUTPUT);
+  pinMode(CLOCK_PIN, OUTPUT);
+  pinMode(LATCH_PIN, OUTPUT);
+
+  // MUX control pins
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(MUX_INPUT, INPUT);
+
+  // Initialize shift register
+  shiftRegState = 0x00;
+  updateShiftRegister();
 }
 
-// =================== API PUBLIC ===================
+// ===========================
+// Validation
+// ===========================
+bool GPIO_IS_VALID(uint8_t pin) {
+  // Valid ESP physical pins (0–10)
+  if (pin <= 10) {
+    // block reserved pins
+    if (pin == 0 || pin == 1 || pin == 3 || pin == 4 ||
+        pin == 5 || pin == 6 || pin == 7 ||
+        pin == 8 || pin == 9)
+      return false; // reserved
+    return true; // e.g., 2 and 10 are allowed
+  }
 
-bool rfid_init(uint8_t sdaPin, uint8_t sclPin)
-{
-    Serial.println("\n=== Init RFID (PN532) ===");
+  // Virtual MUX pins
+  if (pin >= 100 && pin <= 107) return true;
 
-    if (!g_nfc) {
-        // I2C software pe pini definiti de utilizator
-        g_nfc = new Adafruit_PN532(sdaPin, sclPin);
-    }
+  // Virtual Shift Register pins
+  if (pin >= 200 && pin <= 207) return true;
 
-    Wire.begin(sdaPin, sclPin);
-    g_nfc->begin();
-
-    uint32_t ver = g_nfc->getFirmwareVersion();
-    if (!ver) {
-        Serial.println("❌ PN532 nu raspunde!");
-        return false;
-    }
-
-    Serial.print("✅ PN532 detectat, versiune 0x");
-    Serial.println((ver >> 16) & 0xFFFF, HEX);
-
-    g_nfc->SAMConfig();
-    randomSeed(millis());
-
-    Serial.println("RFID initializat. Apropie un card MIFARE Classic 1K...");
-    return true;
+  // Otherwise invalid
+  return false;
 }
 
-bool rfid_readTag(rfid_tag_t *tag, uint32_t timeoutMs)
-{
-    if (!g_nfc) return false;
+// ===========================
+// I/O Functions
+// ===========================
+void GPIO_SET(uint8_t pin, bool state) {
+  if (!GPIO_IS_VALID(pin)) {
+    Serial.printf("GPIO_SET ERROR: invalid or reserved pin %d\n", pin);
+    return;
+  }
 
-    uint32_t start = millis();
-    uint8_t uid[7];
-    uint8_t uidLen = 0;
-
-    // asteapta card pana la timeout
-    while (true) {
-        if (g_nfc->readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen)) {
-            // Card detectat
-            break;
-        }
-        if (millis() - start > timeoutMs) {
-            return false;   // timeout
-        }
-        delay(50);
-    }
-
-    Serial.print("\n💡 Card detectat | UID: ");
-    printHexInternal(uid, uidLen);
-    Serial.println();
-
-    // copiem UID in struct
-    tag->uidLen = uidLen;
-    for (uint8_t i = 0; i < uidLen; i++) {
-        tag->uid[i] = uid[i];
-    }
-
-    // citim datele din blocurile 4..11
-    char dataBuf[RFID_MAX_DATA_LEN + 1];
-    uint16_t idx = 0;
-    for (uint8_t i = 0; i < RFID_TOTAL_BLOCKS && idx < RFID_MAX_DATA_LEN; i++) {
-        uint8_t buf[16];
-        if (!readBlock(RFID_FIRST_BLOCK + i, buf)) {
-            return false;
-        }
-        for (uint8_t j = 0; j < 16 && idx < RFID_MAX_DATA_LEN; j++) {
-            if (buf[j] == 0x00) {
-                // consideram 0x00 ca terminator de string
-                i = RFID_TOTAL_BLOCKS; // iesim din ambele for-uri
-                break;
-            }
-            dataBuf[idx++] = (char)buf[j];
-        }
-    }
-    dataBuf[idx] = '\0';
-
-    strncpy(tag->data, dataBuf, RFID_MAX_DATA_LEN);
-    tag->data[RFID_MAX_DATA_LEN] = '\0';
-    tag->dataType = RFID_DATA_TYPE_STRING;  // de fapt nu stim sigur, dar o tratam ca string
-
-    Serial.print("🧾 Data citita: ");
-    Serial.println(tag->data);
-
-    return true;
+  if (pin <= 10) {
+    // Physical ESP pin
+    digitalWrite(pin, state ? HIGH : LOW);
+  }
+  else if (pin >= 200 && pin <= 207) {
+    // Shift register pin
+    uint8_t bit = pin - 200;
+    if (state)
+      shiftRegState |= (1 << bit);
+    else
+      shiftRegState &= ~(1 << bit);
+    updateShiftRegister();
+  }
+  else {
+    Serial.printf("GPIO_SET ERROR: unsupported pin range %d\n", pin);
+  }
 }
 
-bool rfid_writeTag(const char *data,
-                   rfid_data_type_t type,
-                   const uint8_t *expectedUid,
-                   uint8_t expectedUidLen)
-{
-    if (!g_nfc) return false;
+int GPIO_DIGITAL_READ(uint8_t pin) {
+  if (!GPIO_IS_VALID(pin)) {
+    Serial.printf("GPIO_DIGITAL_READ ERROR: invalid or reserved pin %d\n", pin);
+    return LOW;
+  }
 
-    char localData[RFID_MAX_DATA_LEN + 1];
-
-    // pregatim sirul de scris
-    if (type == RFID_DATA_TYPE_RANDOM) {
-        rfid_generateRandomString(localData, RFID_MAX_DATA_LEN);
-        Serial.println("🧾 Cod random generat pentru scriere:");
-        Serial.println(localData);
-    } else {
-        if (!data) return false;
-        strncpy(localData, data, RFID_MAX_DATA_LEN);
-        localData[RFID_MAX_DATA_LEN] = '\0';
-        Serial.println("🧾 Data primita pentru scriere:");
-        Serial.println(localData);
-    }
-
-    // asteptam cardul pe care sa scriem (max 5s)
-    uint32_t start = millis();
-    uint8_t uid[7];
-    uint8_t uidLen = 0;
-
-    Serial.println("\n⚙️ Astept un card pentru scriere...");
-    while (true) {
-        if (g_nfc->readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen)) {
-            // am gasit un card
-            // daca se doreste un UID specific, verificam
-            if (expectedUid && expectedUidLen > 0) {
-                if (uidLen == expectedUidLen && memcmp(uid, expectedUid, uidLen) == 0) {
-                    break; // este cardul dorit
-                } else {
-                    Serial.println("Card gasit, dar UID-ul nu corespunde. Astept alt card...");
-                }
-            } else {
-                // acceptam orice card
-                break;
-            }
-        }
-
-        if (millis() - start > 5000) {
-            Serial.println("❌ Timeout asteptare card pentru scriere.");
-            return false;
-        }
-        delay(50);
-    }
-
-    Serial.print("💡 Scriu pe cardul cu UID: ");
-    printHexInternal(uid, uidLen);
-    Serial.println();
-
-    // scriem codul in blocurile 4..11
-    uint8_t dataBlock[16];
-    Serial.println("⚙️ Incep scrierea blocurilor...");
-
-    for (uint8_t i = 0; i < RFID_TOTAL_BLOCKS; i++) {
-        memset(dataBlock, 0, 16);
-        for (uint8_t j = 0; j < 16; j++) {
-            uint16_t idx = i * 16 + j;
-            if (idx < strlen(localData)) {
-                dataBlock[j] = (uint8_t)localData[idx];
-            } else {
-                dataBlock[j] = 0x00;
-            }
-        }
-        if (!writeBlock(RFID_FIRST_BLOCK + i, dataBlock)) {
-            Serial.println("❌ Eroare la scriere! Oprire.");
-            return false;
-        }
-    }
-
-    Serial.println("✅ Scriere completa.");
-    return true;
+  if (pin <= 10) {
+    return digitalRead(pin);
+  }
+  else if (pin >= 100 && pin <= 107) {
+    uint8_t ch = pin - 100;
+    selectMuxChannel(ch);
+    int val = analogRead(MUX_INPUT);
+    return (val > 2000) ? HIGH : LOW;
+  }
+  else {
+    Serial.printf("GPIO_DIGITAL_READ ERROR: unsupported pin %d\n", pin);
+    return LOW;
+  }
 }
 
-void rfid_generateRandomString(char *out, size_t len)
-{
-    static const char chars[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz"
-        "0123456789";
+int GPIO_READ(uint8_t pin) {
+  if (!GPIO_IS_VALID(pin)) {
+    Serial.printf("GPIO_READ ERROR: invalid or reserved pin %d\n", pin);
+    return 0;
+  }
 
-    size_t nChars = sizeof(chars) - 1;
-    if (len > RFID_MAX_DATA_LEN) len = RFID_MAX_DATA_LEN;
-
-    for (size_t i = 0; i < len; i++) {
-        out[i] = chars[random(nChars)];
-    }
-    out[len] = '\0';
+  if (pin <= 10) {
+    return analogRead(pin);
+  }
+  else if (pin >= 100 && pin <= 107) {
+    uint8_t ch = pin - 100;
+    selectMuxChannel(ch);
+    return analogRead(MUX_INPUT);
+  }
+  else {
+    Serial.printf("GPIO_READ ERROR: unsupported pin %d\n", pin);
+    return 0;
+  }
 }
-
-void rfid_printUid(const uint8_t *uid, uint8_t uidLen)
-{
-    printHexInternal(uid, uidLen);
-}
-

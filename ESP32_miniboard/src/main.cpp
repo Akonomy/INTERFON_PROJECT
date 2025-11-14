@@ -62,61 +62,30 @@ void setup() {
     */
     memset(currentInput, 0, sizeof(currentInput));
      OLED_Clear();
+
+
+
+
+    rfid_init();
 }
 
 void loop() {
-  if (inputLength >= MAX_INPUT_LEN) return; // block overrun
+  if (rfid_detect()) {
+    rfid_printUID();
 
-  char ch = KEYBOARD_READ_CHAR();
-
-  if (ch == '#') {
-    currentInput[inputLength] = '\0';
-
-    if (inputLength > 0) {
-      // Send the input as a log message
-      logSensorEvent(6, "user", String(currentInput), 2); // info level, from "user"
-      Serial.println("LOG SENT:");
-      Serial.println(currentInput);
-      OLED_DisplayText("LOG SENT");
-    } else {
-      OLED_DisplayText("EMPTY INPUT");
+    if (rfid_tag.type == RFID_TYPE_MIFARE_1K) {
+      uint8_t data[16];
+      if (rfid_readBlock(4, data)) {
+        Serial.print("📖 Bloc 4: ");
+        for (int i = 0; i < 16; i++) {
+          if (data[i] >= 32 && data[i] <= 126)
+            Serial.print((char)data[i]);
+          else
+            Serial.print(".");
+        }
+        Serial.println();
+      }
     }
-
     delay(2000);
-    memset(currentInput, 0, sizeof(currentInput));
-    inputLength = 0;
-    OLED_Clear();
-    return;
   }
-
-  if (ch == '*') {
-    if (inputLength > 0) {
-      inputLength--;
-      currentInput[inputLength] = '\0';
-      updateDisplay();
-    }
-    return;
-  }
-
-  if (ch != '\0' && inputLength < MAX_INPUT_LEN) {
-    currentInput[inputLength++] = ch;
-    currentInput[inputLength] = '\0';
-    updateDisplay();
-  }
-
-
-
-
-
-  rfid_tag_t tag;
-  if (RFID_Read(&tag)) {
-    Serial.printf("Tag UID: %08X\n", tag.uid);
-    Serial.printf("Type: %d\n", tag.type);
-    Serial.printf("Data: %s\n", tag.data);
-    
-}
-
-
-
-
 }

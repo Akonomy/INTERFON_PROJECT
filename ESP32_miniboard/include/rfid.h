@@ -2,62 +2,40 @@
 #define RFID_H
 
 #include <Arduino.h>
+#include <Adafruit_PN532.h>
 
-#define RFID_MAX_DATA_LEN 128
+// === CONFIGURARE HARDWARE PN532 ===
+#define RFID_SDA_PIN 8
+#define RFID_SCL_PIN 9
 
-// tipul de date scrise pe card
-typedef enum
-{
-    RFID_DATA_TYPE_STRING = 0,   // foloseste sirul dat ca atare
-    RFID_DATA_TYPE_RANDOM = 1    // ignora "data" si genereaza intern un cod random de 128 caractere
-} rfid_data_type_t;
+// === DEFINIȚII TIP TAG ===
+#define RFID_TYPE_UNKNOWN    0
+#define RFID_TYPE_MIFARE_1K  1
+#define RFID_TYPE_ULTRALIGHT 2
+#define RFID_TYPE_NTAG       3
 
-// struct cu informatii despre tag
-typedef struct
-{
+// === CONSTANTE MIFARE ===
+#define RFID_BLOCK_SIZE 16
+#define RFID_KEY_DEFAULT 0xFF
+
+// === STRUCTURI ===
+typedef struct {
     uint8_t uid[7];
-    uint8_t uidLen;
-    char    data[RFID_MAX_DATA_LEN + 1];  // ASCII, terminat cu '\0'
-    rfid_data_type_t dataType;
-} rfid_tag_t;
+    uint8_t uid_len;
+    uint8_t type;
+} RFID_Tag;
 
-/**
- * Initializeaza modulul RFID (PN532 pe I2C software).
- * Intoarce true daca a gasit PN532 si l-a configurat.
- */
-bool rfid_init(uint8_t sdaPin, uint8_t sclPin);
+// === VARIABILE GLOBALE ===
+extern RFID_Tag rfid_tag;
+extern Adafruit_PN532 rfid_nfc;
 
-/**
- * Citeste un tag (asteapta pana la timeoutMs pentru aparitia unui card).
- * Umple structura rfid_tag_t cu UID + data din blocurile 4..11.
- * Intoarce true daca citirea a reusit.
- */
-bool rfid_readTag(rfid_tag_t *tag, uint32_t timeoutMs);
+// === FUNCȚII DE INTERFAȚĂ ===
+void rfid_init(void);
+bool rfid_detect(void);
+void rfid_printUID(void);
+const char* rfid_getTypeName(uint8_t type);
+bool rfid_authBlock(uint8_t block);
+bool rfid_readBlock(uint8_t block, uint8_t* data16);
+bool rfid_writeBlock(uint8_t block, const uint8_t* data16);
 
-/**
- * Scrie pe un tag.
- *  - data      : sirul care se doreste scris (folosit doar daca type == RFID_DATA_TYPE_STRING)
- *  - type      : tip de date (STRING sau RANDOM)
- *  - expectedUid / expectedUidLen:
- *        - daca sunt NULL / 0 => scrie pe orice tag prezentat
- *        - daca nu sunt NULL => scrie doar daca UID-ul cardului corespunde
- *
- * Intoarce true daca scrierea a reusit.
- */
-bool rfid_writeTag(const char *data,
-                   rfid_data_type_t type,
-                   const uint8_t *expectedUid,
-                   uint8_t expectedUidLen);
-
-/**
- * Genereaza un sir random de lungime "len" (max 128) in buffer-ul "out".
- * Sirul este terminat cu '\0'.
- */
-void rfid_generateRandomString(char *out, size_t len);
-
-/**
- * Functie utila pentru debug: afiseaza UID-ul in hex pe Serial.
- */
-void rfid_printUid(const uint8_t *uid, uint8_t uidLen);
-
-#endif // RFID_H
+#endif
