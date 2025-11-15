@@ -70,22 +70,68 @@ void setup() {
 }
 
 void loop() {
-  if (rfid_detect()) {
-    rfid_printUID();
 
-    if (rfid_tag.type == RFID_TYPE_MIFARE_1K) {
-      uint8_t data[16];
-      if (rfid_readBlock(4, data)) {
-        Serial.print("📖 Bloc 4: ");
-        for (int i = 0; i < 16; i++) {
-          if (data[i] >= 32 && data[i] <= 126)
-            Serial.print((char)data[i]);
-          else
-            Serial.print(".");
+    if (rfid_detect()) {
+        Serial.println("\n--- TAG DETECTAT ---");
+        rfid_printUID();
+
+        // Dacă este NTAG sau Ultralight
+        if (rfid_tag.type != RFID_TYPE_MIFARE_1K) {
+            Serial.println("⚠ Tag NU este MIFARE Classic → nu are blocuri de 16 bytes.\n");
+            delay(1000);
+            return;
         }
-        Serial.println();
-      }
+
+        // Dacă este MIFARE Classic 1K → citim blocul 4
+        Serial.println("🔍 Citim blocul 4 (user data)...");
+        uint8_t blockData[16];
+
+        if (rfid_readBlock(4, blockData)) {
+            Serial.print("📖 Bloc 4: ");
+            for (int i = 0; i < 16; i++) {
+                delay(10);
+                if (blockData[i] < 0x10) Serial.print("0");
+                Serial.print(blockData[i], HEX);
+                Serial.print(" ");
+            }
+            Serial.println();
+
+        } else {
+            Serial.println("❌ Citirea blocului a eșuat.");
+        }
+
+        // Scriem un test în blocul 4
+        Serial.println("✍ Scriem text de test în blocul 4...");
+        uint8_t writeTest[16] = {
+            'T','E','S','T','_','D','A','T','A','_',0x01,0x02,0x03,0x04,0x05,0x06
+        };
+        delay(1000);
+
+        if (rfid_writeBlock(4, writeTest)) {
+            Serial.println("✅ Scriere OK");
+        } else {
+            Serial.println("❌ Scriere eșuată.");
+        }
+
+        delay(500);
+
+        // Recitim pentru confirmare
+        Serial.println("🔁 Recitim blocul 4...");
+        if (rfid_readBlock(4, blockData)) {
+            Serial.print("📖 Bloc 4 dupa scriere: ");
+            for (int i = 0; i < 16; i++) {
+                if (blockData[i] < 0x10) Serial.print("0");
+                Serial.print(blockData[i], HEX);
+                Serial.print(" ");
+            }
+            Serial.println();
+            rfid_printDecodedBlock(blockData);
+        }
+
+        Serial.println("\n---------------------------\n");
+        delay(1500);
     }
-    delay(2000);
-  }
+
+    delay(200);
 }
+
