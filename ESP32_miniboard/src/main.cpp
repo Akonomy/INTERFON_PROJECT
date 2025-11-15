@@ -70,68 +70,35 @@ void setup() {
 }
 
 void loop() {
+    String uid, data;
 
-    if (rfid_detect()) {
+    // CITIRe
+    if (rfid_readTag(uid, data)) {
         Serial.println("\n--- TAG DETECTAT ---");
-        rfid_printUID();
+        Serial.print("UID: ");
+        Serial.println(uid);
+        Serial.print("Data RAW (string): ");
+        Serial.println(data);
+        Serial.println("-------------------");
 
-        // Dacă este NTAG sau Ultralight
-        if (rfid_tag.type != RFID_TYPE_MIFARE_1K) {
-            Serial.println("⚠ Tag NU este MIFARE Classic → nu are blocuri de 16 bytes.\n");
-            delay(1000);
-            return;
-        }
+        // TEST: scriem ceva nou
+        String toWrite = "ACCESS_CODE_123456";
+        Serial.print("✍ Scriu: ");
+        Serial.println(toWrite);
 
-        // Dacă este MIFARE Classic 1K → citim blocul 4
-        Serial.println("🔍 Citim blocul 4 (user data)...");
-        uint8_t blockData[16];
-
-        if (rfid_readBlock(4, blockData)) {
-            Serial.print("📖 Bloc 4: ");
-            for (int i = 0; i < 16; i++) {
-                delay(10);
-                if (blockData[i] < 0x10) Serial.print("0");
-                Serial.print(blockData[i], HEX);
-                Serial.print(" ");
+        if (rfid_writeTag(toWrite)) {
+            // citim din nou să verificăm
+            delay(300);
+            String uid2, data2;
+            if (rfid_readTag(uid2, data2)) {
+                Serial.print("🔁 Recitit: ");
+                Serial.println(data2);
             }
-            Serial.println();
-
-        } else {
-            Serial.println("❌ Citirea blocului a eșuat.");
         }
 
-        // Scriem un test în blocul 4
-        Serial.println("✍ Scriem text de test în blocul 4...");
-        uint8_t writeTest[16] = {
-            'T','E','S','T','_','D','A','T','A','_',0x01,0x02,0x03,0x04,0x05,0x06
-        };
-        delay(1000);
-
-        if (rfid_writeBlock(4, writeTest)) {
-            Serial.println("✅ Scriere OK");
-        } else {
-            Serial.println("❌ Scriere eșuată.");
-        }
-
-        delay(500);
-
-        // Recitim pentru confirmare
-        Serial.println("🔁 Recitim blocul 4...");
-        if (rfid_readBlock(4, blockData)) {
-            Serial.print("📖 Bloc 4 dupa scriere: ");
-            for (int i = 0; i < 16; i++) {
-                if (blockData[i] < 0x10) Serial.print("0");
-                Serial.print(blockData[i], HEX);
-                Serial.print(" ");
-            }
-            Serial.println();
-            rfid_printDecodedBlock(blockData);
-        }
-
-        Serial.println("\n---------------------------\n");
+        Serial.println("\nApropie/indeparteaza tagul...");
         delay(1500);
     }
 
     delay(200);
 }
-
