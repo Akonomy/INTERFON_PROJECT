@@ -114,7 +114,8 @@ void loop() {
  
 
 delay(5500);
-  Serial.println("\n📥 ALLOWED: Requesting tag info...");
+/*
+  Serial.println("\n: Requesting tag info...");
   String infoResponse = getTagInfo("TEST17112025");
 
   if (infoResponse == "") {
@@ -154,6 +155,19 @@ delay(5500);
   Serial.println("Owner          : " + String(owner));
   Serial.println("Encrypted Info : " + String(encrypted_info));
   Serial.println("Created At     : " + String(doc["created"].as<const char*>()));
+
+*/
+Serial.println("\n🔧 Testing checkTag()...");
+uint8_t result = checkTag("TEST17112025","2025-11-17 23:35:24|17207b76ff");
+
+if (result == 1) {
+    Serial.println("✅ checkTag(): ACCESS GRANTED");
+} else if (result == 0) {
+    Serial.println("❌ checkTag(): ACCESS DENIED");
+} else {
+    Serial.println("⚠️ checkTag(): UNKNOWN TAG");
+}
+
 }
 
 

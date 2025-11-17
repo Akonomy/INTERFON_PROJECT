@@ -504,7 +504,7 @@ void syncTime() {
 void connectAndCheckTag(const char* ssid, const char* password, const String& tagUID) {
   connectWiFi(ssid, password);
   if (authenticate()) {
-    checkTag(tagUID);
+    ;
   }
 }
 
