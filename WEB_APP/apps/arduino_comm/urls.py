@@ -31,7 +31,7 @@ urlpatterns = [
     path('api/auth/challenge/', views.request_challenge, name='request_challenge'),
     path('api/auth/respond/', views.respond_challenge, name='respond_challenge'),
     path('api/tag/check/', views.api_tag_check, name='api_tag_check'),
-    path('api/tag/info/'views.api_tag_get_info, name= 'api_get_info'),
+    path('api/tag/info/' , views.api_tag_get_info, name= 'api_get_info'),
     path('api/commands/poll/', views.public_poll_commands, name='public_poll_commands'),
     path('api/commands/ack/', views.public_acknowledge_command, name='public_acknowledge_command'),
 

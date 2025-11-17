@@ -10,27 +10,6 @@ from .models import TAG, TagRegisterRequest, TagRevokeRequest, DEVICE
 from django import forms
 
 
-import os
-import base64
-from cryptography.fernet import Fernet  # or your preferred encryption
-
-# This should ultimately live in settings.py
-FERNET_KEY = Fernet.generate_key()
-cipher = Fernet(FERNET_KEY)
-
-def generate_encrypted_info(tag_uid: str):
-    """Creates encrypted info for a tag."""
-    payload = {
-        "tag_uid": tag_uid,
-        "random": base64.b64encode(os.urandom(32)).decode(),
-        "description": "Secure-tag-verification-block"
-    }
-
-    # Convert to JSON and encrypt
-    json_bytes = json.dumps(payload).encode()
-    encrypted = cipher.encrypt(json_bytes)
-
-    return encrypted.decode()
 
 
 
@@ -164,11 +143,12 @@ def api_revoke_tag_request(request):
 
 
 
+
 def approve_tag_register_request(request, request_id):
     """Approve a pending tag registration request and create a TAG."""
     req = get_object_or_404(TagRegisterRequest, id=request_id)
 
-    # Check if the tag already exists
+    # Check if a tag with this UID already exists
     tag, created = TAG.objects.get_or_create(
         uid=req.tag_uid,
         defaults={
@@ -177,16 +157,15 @@ def approve_tag_register_request(request, request_id):
         },
     )
 
-    # 🔐 IF CREATED: generate encrypted info once
-    if created or not tag.encrypted_info:
-        tag.encrypted_info = generate_encrypted_info(tag.uid)
+    if not created:
+        # If it already existed, just make sure it's allowed
+        tag.is_allowed = True
         tag.save()
 
-    # Mark the request as approved
     req.status = "approved"
     req.save()
 
-    messages.success(request, f"Tag {tag.uid} approved, added, and encrypted info stored.")
+    messages.success(request, f"Tag {tag.uid} approved and added.")
     return redirect("arduino_comm:tag_register_requests")
 
 

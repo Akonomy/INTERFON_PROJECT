@@ -67,10 +67,16 @@ void setup() {
 
 
     rfid_init();
+    registerTAG("TEST17112025", "Test tag added via ESP32");
 }
 
 void loop() {
+
+    /**
     String uid, data;
+
+
+
 
     // CITIRe
     if (rfid_readTag(uid, data)) {
@@ -101,4 +107,57 @@ void loop() {
     }
 
     delay(200);
+
+    */
+
+
+ 
+
+delay(5500);
+  Serial.println("\n📥 ALLOWED: Requesting tag info...");
+  String infoResponse = getTagInfo("TEST17112025");
+
+  if (infoResponse == "") {
+    Serial.println("❌ No response or API error");
+    return;
+  }
+
+  // 5️⃣ Parse server response
+  StaticJsonDocument<512> doc;
+  if (deserializeJson(doc, infoResponse)) {
+    Serial.println("❌ JSON parse error");
+    return;
+  }
+
+  const char* status = doc["status"] | "error";
+
+  if (strcmp(status, "expired") == 0) {
+    Serial.println("⚠️ TAG INFO EXPIRED (older than 5 minutes)");
+    return;
+  }
+
+  if (strcmp(status, "unknown") == 0) {
+    Serial.println("❌ TAG does not exist");
+    return;
+  }
+
+  if (strcmp(status, "ok") != 0) {
+    Serial.printf("❌ Unexpected status: %s\n", status);
+    return;
+  }
+
+  // 6️⃣ Extract encrypted info
+  const char* encrypted_info = doc["encrypted_info"] | "";
+  const char* owner = doc["owner"] | "N/A";
+
+  Serial.println("\n=== TAG INFO RECEIVED ===");
+  Serial.println("Owner          : " + String(owner));
+  Serial.println("Encrypted Info : " + String(encrypted_info));
+  Serial.println("Created At     : " + String(doc["created"].as<const char*>()));
 }
+
+
+    
+
+
+

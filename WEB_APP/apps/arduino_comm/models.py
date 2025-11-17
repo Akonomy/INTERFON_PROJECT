@@ -4,6 +4,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from dataclasses import dataclass, field
 from bson.objectid import ObjectId
 from django.utils import timezone
+from datetime import datetime
 
 
 
@@ -135,27 +136,27 @@ class PERSONAL(models.Model):
 
 
 class TAG(models.Model):
-    """
-    Represents an access tag (e.g., RFID, NFC) assigned to a person.
-    """
-    uid = models.CharField(max_length=100, unique=True, help_text="The unique identifier from the physical tag.")
-    owner = models.ForeignKey(PERSONAL, on_delete=models.SET_NULL, null=True, blank=True, related_name='tags')
-    is_allowed = models.BooleanField(default=False, help_text="Check this box if the tag is currently allowed access.")
-    description = models.CharField(max_length=255, blank=True, null=True, help_text="Optional description, e.g., 'Main keychain fob'.")
-    encrypted_info = models.TextField(
-        blank=True,
-        null=True,
-        help_text="Stores encrypted additional information for secure verification."
-    )
+    uid = models.CharField(max_length=100, unique=True)
+    owner = models.ForeignKey(PERSONAL, on_delete=models.SET_NULL, null=True, blank=True)
+    is_allowed = models.BooleanField(default=False)
+    description = models.CharField(max_length=255, blank=True, null=True)
+    encrypted_info = models.TextField(blank=True, null=True)
 
-    created_at = mode
     created_at = models.DateTimeField(auto_now_add=True)
     last_used = models.DateTimeField(null=True, blank=True)
+
 
     def __str__(self):
         owner_name = self.owner.full_name if self.owner else "Unassigned"
         return f"TAG UID: {self.uid} (Owner: {owner_name}, Allowed: {self.is_allowed})"
 
+    def save(self, *args, **kwargs):
+        if not self.pk and not self.encrypted_info:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            random_str = secrets.token_hex(5)  # 10 chars
+            self.encrypted_info = f"{timestamp}|{random_str}"
+
+        super().save(*args, **kwargs)
     class Meta:
         verbose_name = "TAG"
         verbose_name_plural = "TAGS"

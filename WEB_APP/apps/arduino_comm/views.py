@@ -534,9 +534,7 @@ def api_tag_get_info(request):
     if not tag:
         return JsonResponse({"status": "unknown"}, status=200)
 
-    # Check if tag belongs to same device
-    if tag.device_id != device_id:
-        return JsonResponse({"error": "Forbidden"}, status=403)
+
 
     # Check age (max 5 min)
     age_seconds = (dj_tz.now() - tag.created_at).total_seconds()

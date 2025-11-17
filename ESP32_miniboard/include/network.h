@@ -3,6 +3,7 @@
 #define NETWORK_H
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 
 #define DEVICE_ID "esp_test"
@@ -44,10 +45,13 @@ void receiveQueue();
 // -----------------------------------------------------------------------------
 //  TAG OPERATIONS
 // -----------------------------------------------------------------------------
-void checkTag(const String& tagUID);
+uint8_t checkTag(const String& tagUID);
 void registerTAG(const String& tag_uid, const String& notes = "");
 void deleteTAG(const String& tag_uid, const String& reason = "");
 void connectAndCheckTag(const char* ssid = "Minerii din bomboclat", const char* password = "castravete", const String& tagUID = "SOME_TAG_UID");
+
+String getTagInfo(const String& tagUID);
+
 // -----------------------------------------------------------------------------
 //  SENSOR FUNCTIONS
 // -----------------------------------------------------------------------------
