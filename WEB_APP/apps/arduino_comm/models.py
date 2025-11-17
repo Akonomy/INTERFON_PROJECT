@@ -142,6 +142,13 @@ class TAG(models.Model):
     owner = models.ForeignKey(PERSONAL, on_delete=models.SET_NULL, null=True, blank=True, related_name='tags')
     is_allowed = models.BooleanField(default=False, help_text="Check this box if the tag is currently allowed access.")
     description = models.CharField(max_length=255, blank=True, null=True, help_text="Optional description, e.g., 'Main keychain fob'.")
+    encrypted_info = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Stores encrypted additional information for secure verification."
+    )
+
+    created_at = mode
     created_at = models.DateTimeField(auto_now_add=True)
     last_used = models.DateTimeField(null=True, blank=True)
 

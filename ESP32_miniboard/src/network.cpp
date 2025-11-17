@@ -289,25 +289,63 @@ void receiveQueue() {
 // -----------------------------------------------------------------------------
 //  TAG CHECK
 // -----------------------------------------------------------------------------
-void checkTag(const String& tagUID) {
-  if (sessionToken == "") return;
-  HTTPClient http;
-  Serial.println("→ Checking tag...");
-  http.begin(BASE_URL + "/api/tag/check/");
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Session-Token", sessionToken);
-  String tagBody = "{\"tag_uid\":\"" + tagUID + "\"}";
-  int code = http.POST(tagBody);
-  String response = http.getString();
-  http.end();
+uint8_t checkTag(const String& tagUID, const String& encryptedInfo) {
+    if (sessionToken == "") {
+        Serial.println("⚠️ No session token. Cannot check tag.");
+        return 2; // unknown
+    }
 
-  StaticJsonDocument<512> doc;
-  deserializeJson(doc, response);
-  bool granted = doc["access_granted"];
-  const char* reason = doc["reason"] | "none";
+    HTTPClient http;
+    http.begin(BASE_URL + "/api/tag/check/");
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Session-Token", sessionToken);
 
-  Serial.printf("🚪 Access: %s\n", granted ? "GRANTED 🎉" : "DENIED 🔒");
-  Serial.println("Reason: " + String(reason));
+    StaticJsonDocument<256> json;
+    json["tag_uid"] = tagUID;
+    json["encrypted_info"] = encryptedInfo;
+
+    String payload;
+    serializeJson(json, payload);
+
+    int httpCode = http.POST(payload);
+    String response = http.getString();
+    http.end();
+
+    Serial.println("Server response: " + response);
+
+    // Dacă serverul nu a returnat OK
+    if (httpCode != 200) {
+        Serial.println("❌ Server error, code=" + String(httpCode));
+        return 2; // unknown
+    }
+
+    StaticJsonDocument<512> doc;
+    auto err = deserializeJson(doc, response);
+    if (err) {
+        Serial.println("❌ JSON parse error");
+        return 2; // unknown
+    }
+
+    const char* reason = doc["reason"] | "unknown_tag";
+    Serial.println("Reason: " + String(reason));
+
+    // ACCEPTAT
+    if (strcmp(reason, "allowed") == 0) {
+        return 1;
+    }
+
+    // RESPINS
+    if (strcmp(reason, "not_allowed") == 0 ||
+        strcmp(reason, "encrypted_info_mismatch") == 0) {
+        return 0;
+    }
+
+    // NECUNOSCUT
+    if (strcmp(reason, "unknown_tag") == 0) {
+        return 2;
+    }
+
+    return 2; // fallback
 }
 
 // -----------------------------------------------------------------------------
@@ -415,6 +453,35 @@ void logSensorEvent(uint8_t code, const String& sensorName, const String& messag
     Serial.println("⚠️ No session token. API log skipped.");
   }
 }
+
+
+String getTagInfo(const String& tagUID) {
+    if (sessionToken == "") return "";
+
+    HTTPClient http;
+    http.begin(BASE_URL + "/api/tag/info/");
+
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Session-Token", sessionToken);
+
+    StaticJsonDocument<256> json;
+    json["tag_uid"] = tagUID;
+
+    String payload;
+    serializeJson(json, payload);
+
+    int code = http.POST(payload);
+    String response = http.getString();
+    http.end();
+
+    Serial.println("Tag Info Response: " + response);
+
+    if (code != 200) return "";
+
+    return response;
+}
+
+
 
 // -----------------------------------------------------------------------------
 //  TIME SYNC

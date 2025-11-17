@@ -467,41 +467,89 @@ from .models import TAG, PERSONAL, TagRegisterRequest, TagRevokeRequest
 # ──────────────── API VIEWS (ESP32/DEVICE) ────────────────
 @csrf_exempt
 def api_tag_check(request):
-    """
-    Protected API. Header: X-Session-Token: <token>
-    Body: {"tag_uid": "..."}
-    Returns {"access_granted": True|False, "owner": ...}
-    """
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
 
-    session_token = request.headers.get("X-Session-Token") or request.META.get("HTTP_X_SESSION_TOKEN")
-    if not session_token:
-        return JsonResponse({"error": "Missing session token"}, status=401)
-
+    session_token = request.headers.get("X-Session-Token")
     session_info = cache.get(f"session:{session_token}")
+
     if not session_info:
         return JsonResponse({"error": "Invalid or expired session"}, status=401)
 
-    try:
-        data = json.loads(request.body.decode() or "{}")
-    except Exception:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    data = json.loads(request.body.decode() or "{}")
 
     tag_uid = data.get("tag_uid")
+    esp_encrypted = data.get("encrypted_info")   # ← NOU
+
     if not tag_uid:
         return JsonResponse({"error": "Missing tag_uid"}, status=400)
 
     try:
         tag = TAG.objects.get(uid=tag_uid)
     except TAG.DoesNotExist:
-        return JsonResponse({"access_granted": False, "reason": "unknown_tag"}, status=200)
+        return JsonResponse({
+            "access_granted": False,
+            "reason": "unknown_tag",
+        }, status=200)
 
-    return JsonResponse({"access_granted": bool(tag.is_allowed), "owner": tag.owner.full_name if tag.owner else None}, status=200)
+    # Optional: verificare encrypted_info
+    if tag.encrypted_info and esp_encrypted:
+        if not hmac.compare_digest(tag.encrypted_info, esp_encrypted):
+            return JsonResponse({
+                "access_granted": False,
+                "reason": "encrypted_info_mismatch"
+            })
+
+    return JsonResponse({
+        "access_granted": bool(tag.is_allowed),
+        "reason": "allowed" if tag.is_allowed else "not_allowed",
+    }, status=200)
 
 
+@csrf_exempt
+def api_tag_get_info(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
 
+    # Validate session
+    session_token = request.headers.get("X-Session-Token")
+    session = cache.get(f"session:{session_token}")
+    if not session:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
 
+    device_id = session["device_id"]
+
+    # Parse JSON
+    try:
+        data = json.loads(request.body.decode())
+    except:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    tag_uid = data.get("tag_uid")
+    if not tag_uid:
+        return JsonResponse({"error": "Missing tag_uid"}, status=400)
+
+    # Find TAG
+    tag = TAG.objects.filter(uid=tag_uid).first()
+    if not tag:
+        return JsonResponse({"status": "unknown"}, status=200)
+
+    # Check if tag belongs to same device
+    if tag.device_id != device_id:
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    # Check age (max 5 min)
+    age_seconds = (dj_tz.now() - tag.created_at).total_seconds()
+    if age_seconds > 5 * 60:
+        return JsonResponse({"status": "expired"}, status=200)
+
+    # Return tag info safely
+    return JsonResponse({
+        "status": "ok",
+        "encrypted_info": tag.encrypted_info,
+        "owner": tag.owner.full_name if tag.owner else None,
+        "created": tag.created_at.isoformat(),
+    }, status=200)
 
 
 @csrf_exempt
