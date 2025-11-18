@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Adafruit_PN532.h>
-
+#include <ArduinoJson.h>
 
 #include <Crypto.h>
 #include <SHA256.h>
@@ -31,6 +31,16 @@ typedef struct {
     uint8_t  type;
 } RFID_Tag;
 
+
+struct ParsedTagData {
+    String owner;
+    String created;
+    String encrypted_info;
+    bool valid = false;
+};
+
+
+
 extern Adafruit_PN532 rfid_nfc;
 extern RFID_Tag       rfid_tag;
 
@@ -52,8 +62,8 @@ bool rfid_readTag(String &uidHex, String &data);
 //  - NTAG  : paginile 4.. (4 bytes/pagină)
 bool rfid_writeTag(const String &data);
 
-
-
+String buildPlaintextForEncryption(const String& infoResponse);
+ParsedTagData parsePlaintext(const String& plaintext);
 
 static const uint8_t DEVICE_HALF_KEY[16] = {
     0x13, 0x27, 0x55, 0xA9,

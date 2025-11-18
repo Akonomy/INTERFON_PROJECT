@@ -357,6 +357,35 @@ void deriveKey(const String& serverKey, uint32_t outKey[4]) {
 // ==========================
 // PUBLIC API
 // ==========================
+String buildPlaintextForEncryption(const String& infoResponse)
+{
+    StaticJsonDocument<512> doc;
+    if (deserializeJson(doc, infoResponse)) {
+        Serial.println("❌ JSON parse error");
+        return "";
+    }
+
+    const char* status = doc["status"] | "error";
+    if (strcmp(status, "ok") != 0) {
+        Serial.println("❌ Status not OK");
+        return "";
+    }
+
+    const char* encrypted_info = doc["encrypted_info"] | "";
+    const char* owner = doc["owner"] | "N/A";
+    const char* created = doc["created"] | "";
+
+    // Build a flat string to encrypt
+    String plaintext =
+        "owner=" + String(owner) +
+        ";created=" + String(created) +
+        ";info=" + String(encrypted_info);
+
+    return plaintext;
+}
+
+
+
 
 String encryptData(const String& plaintext, const String& serverKey)
 {
@@ -491,4 +520,29 @@ bool rfid_writeTag(const String &plaintext)
     return ok;
 }
 
+ParsedTagData parsePlaintext(const String& plaintext)
+{
+    ParsedTagData out;
 
+    // Căutăm delimitatorii
+    int p_owner = plaintext.indexOf("owner=");
+    int p_created = plaintext.indexOf(";created=");
+    int p_info = plaintext.indexOf(";info=");
+
+    if (p_owner == -1 || p_created == -1 || p_info == -1) {
+        Serial.println("❌ parsePlaintext: invalid format");
+        return out;
+    }
+
+    // Extragem owner
+    out.owner = plaintext.substring(p_owner + 6, p_created);
+
+    // Extragem created
+    out.created = plaintext.substring(p_created + 9, p_info);
+
+    // Extragem encrypted_info
+    out.encrypted_info = plaintext.substring(p_info + 6);
+
+    out.valid = true;
+    return out;
+}
