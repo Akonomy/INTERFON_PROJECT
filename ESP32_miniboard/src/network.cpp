@@ -440,7 +440,7 @@ void logSensorEvent(uint8_t code, const String& sensorName, const String& messag
     json["severity"] = code;
     json["facility"] = "user";
     json["host"] = DEVICE_NAME;
-    json["tag"] = sensorName + "[42]";
+    json["tag"] = sensorName + " ";
     json["message"] = message;
     json["priority"] = code;
     json["device_time"] = String(isoTimestamp);

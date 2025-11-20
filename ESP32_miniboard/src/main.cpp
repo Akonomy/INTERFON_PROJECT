@@ -5,6 +5,7 @@
 #include "oled.h"
 #include "rfid.h"
 #include <Wire.h>
+#include "main.h"
 
 #define MAX_INPUT_LEN 16
 
@@ -32,146 +33,305 @@ void setup() {
   OLED_Init();
   KEYBOARD_INIT();
 
-
-
   // (opțional) sincronizare timp
-  syncTime();
-    OLED_DisplayText("READY");
+syncTime();
+OLED_DisplayText("READY");
+
+logSensorEvent(6, "system", "ESP32 boot completed", 2);     // info → syslog only
+
+logSensorEvent(6, "diagnostics", "System entering DEBUG mode", 2); // debug
 
 
-  // (opțional) primește comenzi din coadă
-  receiveQueue();
+rfid_init();
+
+  initServiceSequence();
+logSensorEvent(6, "system", "ACCES CONTROL INITIALIZAT", 2); // debug
 
 
-
-   logSensorEvent(6, "system", "ESP32 boot completed", 2);     // info → syslog only
-
-  logSensorEvent(7, "diagnostics", "System entering DEBUG mode", 2); // debug
-
-/*
-  UPDATE_SENSOR("TEST_1", 1, "Door Open", "OK");
-
-  // Example: log RFID access attempt
-  LOG_ACCESS("A1B2C3D4", "2025-10-30 21:30:00", "granted", "Access granted to John");
-
-  registerTAG("ABC123456789", "Test tag added via ESP32");
-  deleteTAG("ABC123456789", "Lost card, remove access");
-
-    checkTag("ABC123456789");
-
-    */
-    memset(currentInput, 0, sizeof(currentInput));
-     OLED_Clear();
-
-
-
-
-    rfid_init();
-    registerTAG("TEST17112025", "Test tag added via ESP32");
 }
 
-void loop() {
-
-    /**
-    String uid, data;
 
 
 
 
-    // CITIRe
-    if (rfid_readTag(uid, data)) {
-        Serial.println("\n--- TAG DETECTAT ---");
-        Serial.print("UID: ");
-        Serial.println(uid);
-        Serial.print("Data RAW (string): ");
-        Serial.println(data);
-        Serial.println("-------------------");
 
-        // TEST: scriem ceva nou
-        String toWrite = "ACCESS_CODE_123456";
-        Serial.print("✍ Scriu: ");
-        Serial.println(toWrite);
+int currentMode = DEFAULT_START_MODE;
 
-        if (rfid_writeTag(toWrite)) {
-            // citim din nou să verificăm
-            delay(300);
-            String uid2, data2;
-            if (rfid_readTag(uid2, data2)) {
-                Serial.print("🔁 Recitit: ");
-                Serial.println(data2);
-            }
-        }
+// =====================================================================
+// SERVICE ENTRY SEQUENCE (3 coduri + 3 ENTER + timeout 2 min)
+// =====================================================================
+String serviceSteps[3] = { "123" ,"321" ,"111" };
 
-        Serial.println("\nApropie/indeparteaza tagul...");
-        delay(1500);
+int serviceStepIndex = 0;
+int serviceEnterCount = 0;
+bool serviceActive = false;
+unsigned long serviceStartTime = 0;
+
+void initServiceSequence()
+{
+    resetServiceSequence();
+}
+
+void resetServiceSequence()
+{
+    serviceStepIndex = 0;
+    serviceEnterCount = 0;
+    serviceActive = false;
+}
+
+void globalServiceMonitor(char* input)
+{
+    unsigned long now = millis();
+
+    // timeout 2 minute
+    if (serviceActive && (now - serviceStartTime > 120000)) {
+        Serial.println("[SERVICE] Timeout → reset sequence");
+        resetServiceSequence();
+        return;
     }
 
-    delay(200);
+    if (strlen(input) == 0)
+        return;
 
-    */
+    String val = String(input);
 
+    // ENTER confirmation (input = "")
+    if (val == "" && serviceStepIndex == 3)
+    {
+        serviceEnterCount++;
 
- 
+        Serial.print("[SERVICE] ENTER press ");
+        Serial.print(serviceEnterCount);
+        Serial.println("/3");
 
-delay(5500);
-/*
-  Serial.println("\n: Requesting tag info...");
-  String infoResponse = getTagInfo("TEST17112025");
+        if (serviceEnterCount >= 3)
+            enterServiceMode();
 
-  if (infoResponse == "") {
-    Serial.println("❌ No response or API error");
-    return;
-  }
+        return;
+    }
 
-  // 5️⃣ Parse server response
-  StaticJsonDocument<512> doc;
-  if (deserializeJson(doc, infoResponse)) {
-    Serial.println("❌ JSON parse error");
-    return;
-  }
+    // checking the 3-step sequence
+    if (serviceStepIndex < 3)
+    {
+        Serial.print("[SERVICE] Input received: ");
+        Serial.println(val);
 
-  const char* status = doc["status"] | "error";
+        if (val == serviceSteps[serviceStepIndex])
+        {
+            Serial.print("[SERVICE] Step ");
+            Serial.print(serviceStepIndex + 1);
+            Serial.println(" OK");
 
-  if (strcmp(status, "expired") == 0) {
-    Serial.println("⚠️ TAG INFO EXPIRED (older than 5 minutes)");
-    return;
-  }
+            if (!serviceActive) {
+                serviceStartTime = now;
+                Serial.println("[SERVICE] Starting service sequence timer");
+            }
 
-  if (strcmp(status, "unknown") == 0) {
-    Serial.println("❌ TAG does not exist");
-    return;
-  }
+            serviceActive = true;
+            serviceStepIndex++;
 
-  if (strcmp(status, "ok") != 0) {
-    Serial.printf("❌ Unexpected status: %s\n", status);
-    return;
-  }
+            if (serviceStepIndex == 3) {
+                Serial.println("[SERVICE] All 3 codes OK. Waiting for 3×ENTER.");
+                OLED_DisplayText("Press ENTER 3x");
+            }
 
-  // 6️⃣ Extract encrypted info
-  const char* encrypted_info = doc["encrypted_info"] | "";
-  const char* owner = doc["owner"] | "N/A";
+            return;
+        }
+        else
+        {
+            Serial.print("[SERVICE] WRONG code at step ");
+            Serial.println(serviceStepIndex + 1);
+            Serial.print("[SERVICE] Expected: ");
+            Serial.println(serviceSteps[serviceStepIndex]);
+            Serial.print("[SERVICE] Received: ");
+            Serial.println(val);
 
-  Serial.println("\n=== TAG INFO RECEIVED ===");
-  Serial.println("Owner          : " + String(owner));
-  Serial.println("Encrypted Info : " + String(encrypted_info));
-  Serial.println("Created At     : " + String(doc["created"].as<const char*>()));
-
-*/
-Serial.println("\n🔧 Testing checkTag()...");
-uint8_t result = checkTag("TEST17112025","2025-11-17 23:35:24|17207b76ff");
-
-if (result == 1) {
-    Serial.println("✅ checkTag(): ACCESS GRANTED");
-} else if (result == 0) {
-    Serial.println("❌ checkTag(): ACCESS DENIED");
-} else {
-    Serial.println("⚠️ checkTag(): UNKNOWN TAG");
+            resetServiceSequence();
+            return;
+        }
+    }
 }
 
+
+void enterServiceMode()
+{
+    currentMode = MODE_SERVICE;
+    resetServiceSequence();
+
+    OLED_Clear();
+    OLED_DisplayText("SERVICE MODE");
+    OLED_DisplayText("Select mode:");
 }
 
 
-    
+
+// =====================================================================
+// MODE SYSTEM
+// =====================================================================
+void setMode(int mode)
+{
+    if (mode < 0 || mode >= MAX_MODES)
+        return;
+
+    currentMode = mode;
+}
+
+void runCurrentMode()
+{
+    switch (currentMode)
+    {
+        case 0: mode_service(); break;
+        case 1: mode1(); break;
+        case 2: mode2(); break;
+        case 3: mode3(); break;
+        case 4: mode4(); break;
+        case 5: mode5(); break;
+        case 6: mode6(); break;
+        case 7: mode7(); break;
+        case 8: mode8(); break;
+        case 9: mode9(); break;
+        default:
+            OLED_DisplayText("INVALID MODE");
+    }
+}
 
 
 
+// =====================================================================
+// MODE IMPLEMENTATIONS — toate în același fișier
+// =====================================================================
+
+// MODE 0 — SERVICE MODE
+void mode_service()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 0 - SERVICE");
+
+    if (strlen(input) == 0)
+        return;
+
+    int target = atoi(input);
+
+    if (target > 0 && target < MAX_MODES)
+    {
+        OLED_Clear();
+        OLED_DisplayText("Loading MODE " + String(target));
+        setMode(target);
+    }
+    else
+    {
+        OLED_DisplayText("Invalid selection");
+    }
+}
+
+
+// MODE 1
+void mode1()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 1 ACTIVE");
+
+    // AICI scrii tu logica modului 1
+    // Exemplu:
+    // if (someCondition) doSomething();
+}
+
+
+// MODE 2
+void mode2()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 2 ACTIVE");
+
+    // logica modului 2
+}
+
+
+// MODE 3
+void mode3()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 3 ACTIVE");
+}
+
+
+// MODE 4
+void mode4()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 4 ACTIVE");
+}
+
+
+// MODE 5
+void mode5()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 5 ACTIVE");
+}
+
+
+// MODE 6
+void mode6()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 6 ACTIVE");
+}
+
+
+// MODE 7
+void mode7()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 7 ACTIVE");
+}
+
+
+// MODE 8
+void mode8()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 8 ACTIVE");
+}
+
+
+// MODE 9
+void mode9()
+{
+    char* input = KEYBOARD_READ(0);
+    globalServiceMonitor(input);
+
+    OLED_DisplayText("MODE 9 ACTIVE");
+}
+
+
+
+// =====================================================================
+// MAIN LOOP
+// =====================================================================
+
+
+
+void loop()
+{
+    runCurrentMode();
+
+}

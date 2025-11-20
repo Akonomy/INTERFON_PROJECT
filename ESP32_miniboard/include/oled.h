@@ -35,7 +35,8 @@ void OLED_Clear();
 void OLED_DisplayNumber(uint8_t number);
 
 // Displays arbitrary text at default position
-void OLED_DisplayText(const String &text);
+void OLED_DisplayText(const String &text, uint8_t size = 2);
+
 
 // Displays debug text with custom position, size, and optional clearing
 void OLED_DisplayDebug(const String &text, int x = 0, int y = 0, int size = 1, bool clear = true);

@@ -3,6 +3,8 @@
 #include "gpio.h"
 #include <Arduino.h>
 #include <string.h>
+#include "oled.h"
+
 
 static const uint8_t ROW_PINS[4] = { 201, 204, 203, 202 }; // R2, R4, R6, R7
 static const uint8_t COL_PINS[3] = { 101, 100, 102 }; // C1, C3, C5
@@ -120,7 +122,7 @@ void KEYBOARD_CLEAR_BUFFER() {
 char KEYBOARD_READ_CHAR() {
     static const char* multiCharMap[10] = {
         " 0",       // 0 => Space, 0
-        ".!?1",      // 1 => . ! ?
+        ".!?-1",      // 1 => . ! ?
         "ABC2",      // 2
         "DEF3",      // 3
         "GHI4",      // 4
@@ -229,5 +231,122 @@ void KEYBOARD_READ_STRING(char* buffer, int maxLen, bool stopOnEnter) {
             buffer[index++] = ch;
             buffer[index] = '\0';
         }
+    }
+}
+
+char* KEYBOARD_READ(uint8_t mode)
+{
+    static char buffer[32];
+    memset(buffer, 0, sizeof(buffer));
+
+    int maxLen = (mode == 1) ? 20 : 7;
+    int index = 0;
+    bool isPassword = (mode == 2);
+
+    // Selectăm dimensiunea textului pentru afișaj
+    uint8_t textSize = (mode == 1) ? 2 : 3;
+
+
+
+
+    while (true)
+    {
+        char ch;
+
+        if (mode == 1)
+        {
+            ch = KEYBOARD_READ_CHAR();
+            if (ch == '\0') continue;
+        }
+        else
+        {
+            KeyEvent ev = KEYBOARD_READ_KEY();
+            if (ev.type == KEY_NONE) continue;
+            ch = ev.value;
+        }
+
+        // ENTER (#)
+        // ENTER (#)
+        if (ch == '#')
+        {
+            OLED_Clear();
+
+            if (index == 0)
+            {
+                // return empty string
+                buffer[0] = '\0';
+
+            }
+            else
+            {
+
+                Serial.println(buffer);
+            }
+
+            return buffer;
+        }
+
+        // BACKSPACE (*)
+        if (ch == '*')
+        {
+            if (index > 0)
+            {
+                index--;
+                buffer[index] = '\0';
+            }
+
+            OLED_Clear();
+
+            if (!isPassword)
+            {
+                OLED_DisplayText(buffer, textSize);
+            }
+            else
+            {
+                OLED_DisplayText("``", textSize);
+
+            }
+            continue;
+        }
+
+        // FULL BUFFER
+        if (index >= maxLen)
+        {
+            OLED_Clear();
+            OLED_DisplayText("MAX LIMIT", 2);
+            delay(400);
+            OLED_Clear();
+
+            if (!isPassword){
+                OLED_DisplayText(buffer, textSize);
+            }
+            else{
+                OLED_Clear();
+                OLED_DisplayText("``", 3);
+            }
+
+            continue;
+        }
+
+        // ADD CHARACTER
+        if (ch != '*' || ch != '#' || index < maxLen){
+        buffer[index++] = ch;
+        buffer[index] = '\0';
+
+        OLED_Clear();
+        if (!isPassword)
+        {
+            OLED_DisplayText(buffer, textSize);
+        }
+        else
+        {
+            OLED_Clear();
+            OLED_DisplayText("``", 3);
+            OLED_Update();
+        }
+    }
+
+      OLED_Update();
+
     }
 }

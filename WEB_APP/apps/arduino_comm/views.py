@@ -742,14 +742,16 @@ def web_send_command(request):
 
 
 
+from django.core.paginator import Paginator
 
 def syslog_view(request):
-    logs = SyslogEntry.objects.order_by('-timestamp')[:100]
-    return render(request, 'arduino_comm/syslog.html', {'logs': logs})
+    log_list = SyslogEntry.objects.order_by('-timestamp')
 
+    paginator = Paginator(log_list, 100)  # 100 loguri per pagină
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
-
-
+    return render(request, 'arduino_comm/syslog.html', {'page_obj': page_obj})
 
 
 @csrf_exempt

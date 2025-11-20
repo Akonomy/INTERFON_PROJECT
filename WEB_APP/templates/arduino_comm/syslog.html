@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -16,10 +15,33 @@ th { background-color: #333; color: white; }
 .level-5 { background-color: #f0e68c; color: black; }
 .level-6 { background-color: #90ee90; color: black; }
 .level-7 { background-color: #d3d3d3; color: black; }
+
+/* Pagination styling */
+.pagination { text-align: center; margin: 20px 0; }
+.pagination a, .pagination span {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 2px;
+    border: 1px solid #333;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+}
+.pagination a:hover {
+    background-color: #333;
+    color: white;
+}
+.pagination .current {
+    background-color: #333;
+    color: white;
+    font-weight: bold;
+}
 </style>
 </head>
 <body>
+
 <h2 style="text-align: center;">Syslog Logs</h2>
+
 <table>
 <thead>
 <tr>
@@ -34,7 +56,8 @@ th { background-color: #333; color: white; }
 </tr>
 </thead>
 <tbody>
-{% for log in logs %}
+
+{% for log in page_obj %}
 <tr class="level-{{ log.priority }}">
       <td>{{ log.timestamp }}</td>
       <td>{{ log.device_time|default:"—" }}</td>
@@ -46,9 +69,32 @@ th { background-color: #333; color: white; }
       <td>{{ log.message }}</td>
 </tr>
 {% empty %}
-<tr><td colspan="7" style="text-align:center;">No logs found.</td></tr>
+<tr><td colspan="8" style="text-align:center;">No logs found.</td></tr>
 {% endfor %}
+
 </tbody>
 </table>
+
+<!-- Pagination -->
+<div class="pagination">
+    {% if page_obj.has_previous %}
+        <a href="?page=1">« First</a>
+        <a href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+        {% if num == page_obj.number %}
+            <span class="current">{{ num }}</span>
+        {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+            <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Next ›</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}">Last »</a>
+    {% endif %}
+</div>
+
 </body>
 </html>

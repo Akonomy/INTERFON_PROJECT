@@ -51,13 +51,14 @@ void OLED_DisplayNumber(uint8_t number) {
 // ===========================
 // Display text
 // ===========================
-void OLED_DisplayText(const String &text) {
+void OLED_DisplayText(const String &text, uint8_t size) {
   display.clearDisplay();
-  display.setTextSize(DEFAULT_TEXT_SIZE);
+  display.setTextSize(size);   // folosește dimensiunea cerută
   display.setCursor(DEFAULT_TEXT_X, DEFAULT_TEXT_Y);
   display.print(text);
   display.display();
 }
+
 
 // ===========================
 // Display debug

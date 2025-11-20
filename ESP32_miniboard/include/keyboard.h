@@ -3,7 +3,7 @@
 #define KEYBOARD_H
 
 #include <stdint.h>
-
+#include "oled.h"
 // === Key Types ===
 typedef enum {
     KEY_NONE = 0,   // No key pressed
@@ -39,5 +39,8 @@ void KEYBOARD_CLEAR_BUFFER();
 // Simulates old-style SMS input (e.g., '2' = A/B/C/2)
 // Waits for key press and cycles characters
 char KEYBOARD_READ_CHAR();
+
+
+char* KEYBOARD_READ(uint8_t mode);
 
 #endif // KEYBOARD_H
