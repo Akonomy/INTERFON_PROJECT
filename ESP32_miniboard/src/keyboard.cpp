@@ -265,7 +265,7 @@ char* KEYBOARD_READ(uint8_t mode)
             ch = ev.value;
         }
 
-        // ENTER (#)
+
         // ENTER (#)
         if (ch == '#')
         {
@@ -274,14 +274,12 @@ char* KEYBOARD_READ(uint8_t mode)
             if (index == 0)
             {
                 // return empty string
-                buffer[0] = '\0';
+                buffer[0] = '`';
 
             }
-            else
-            {
 
-                Serial.println(buffer);
-            }
+            Serial.println(buffer);
+
 
             return buffer;
         }

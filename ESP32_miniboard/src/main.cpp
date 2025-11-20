@@ -84,7 +84,7 @@ void globalServiceMonitor(char* input)
     unsigned long now = millis();
 
     // timeout 2 minute
-    if (serviceActive && (now - serviceStartTime > 120000)) {
+    if (serviceActive && (now - serviceStartTime > 60000)) {  // timeout 1 minut
         Serial.println("[SERVICE] Timeout → reset sequence");
         resetServiceSequence();
         return;
@@ -96,7 +96,7 @@ void globalServiceMonitor(char* input)
     String val = String(input);
 
     // ENTER confirmation (input = "")
-    if (val == "" && serviceStepIndex == 3)
+    if (val == "`" && serviceStepIndex == 3)
     {
         serviceEnterCount++;
 
@@ -160,7 +160,7 @@ void enterServiceMode()
 
     OLED_Clear();
     OLED_DisplayText("SERVICE MODE");
-    OLED_DisplayText("Select mode:");
+
 }
 
 
@@ -174,6 +174,7 @@ void setMode(int mode)
         return;
 
     currentMode = mode;
+    OLED_Clear();
 }
 
 void runCurrentMode()
@@ -204,6 +205,7 @@ void runCurrentMode()
 // MODE 0 — SERVICE MODE
 void mode_service()
 {
+    OLED_DisplayText("SERVICE");
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
@@ -218,7 +220,10 @@ void mode_service()
     {
         OLED_Clear();
         OLED_DisplayText("Loading MODE " + String(target));
+        delay(400);
+
         setMode(target);
+
     }
     else
     {
@@ -230,6 +235,7 @@ void mode_service()
 // MODE 1
 void mode1()
 {
+    OLED_DisplayText("MD1");
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
