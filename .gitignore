@@ -1,0 +1,36 @@
+.env
+pisica
+test.py
+
+
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# VSCode
+.vscode/
+
+# Django static and media
+staticfiles/
+media/
+
+# SQLite database (if you don’t want to commit it)
+*.sqlite3
+db.sqlite3
+pai
+
+# Environment files
+.env
+
+# Node stuff (if any)
+node_modules/
+
