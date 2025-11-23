@@ -28,10 +28,21 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1', cast=Csv())
 
 
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': 'pai',
+#     }
+# }
+
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'pai',
+        'ENGINE': 'djongo',
+        'NAME': os.getenv('MONGO_NAME'),
+        'CLIENT': {
+            'host': os.getenv('MONGO_HOST'),
+        }
     }
 }
 
