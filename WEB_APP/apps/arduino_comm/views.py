@@ -747,7 +747,7 @@ from django.core.paginator import Paginator
 def syslog_view(request):
     log_list = SyslogEntry.objects.order_by('-timestamp')
 
-    paginator = Paginator(log_list, 100)  # 100 loguri per pagină
+    paginator = Paginator(log_list, 20)  # 100 loguri per pagină
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 

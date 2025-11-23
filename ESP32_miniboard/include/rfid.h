@@ -65,6 +65,9 @@ bool rfid_writeTag(const String &data);
 String buildPlaintextForEncryption(const String& infoResponse);
 ParsedTagData parsePlaintext(const String& plaintext);
 
+
+String serverToTagPlaintext(const String& jsonResponse);
+
 static const uint8_t DEVICE_HALF_KEY[16] = {
     0x13, 0x27, 0x55, 0xA9,
     0xFE, 0x88, 0xC3, 0x91,

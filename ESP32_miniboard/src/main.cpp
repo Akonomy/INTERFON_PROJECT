@@ -28,7 +28,8 @@ void updateDisplay() {
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  connectWiFi();
+  //connectWiFi("C004", "53638335");
+    connectWiFi();
   GPIO_INIT();
   OLED_Init();
   KEYBOARD_INIT();
@@ -182,12 +183,12 @@ void runCurrentMode()
     switch (currentMode)
     {
         case 0: mode_service(); break;
-        case 1: mode1(); break;
-        case 2: mode2(); break;
-        case 3: mode3(); break;
-        case 4: mode4(); break;
-        case 5: mode5(); break;
-        case 6: mode6(); break;
+        case 1: mode1(); break;  //mode public
+        case 2: mode2(); break;  //mode  register tag
+        case 3: mode3(); break;  //mode out of service
+        case 4: mode4(); break; //mode connect to wifi new
+        case 5: mode5(); break; //mode log a msg
+        case 6: mode6(); break; //mode show info about a card
         case 7: mode7(); break;
         case 8: mode8(); break;
         case 9: mode9(); break;
@@ -199,7 +200,7 @@ void runCurrentMode()
 
 
 // =====================================================================
-// MODE IMPLEMENTATIONS — toate în același fișier
+// MODE IMPLEMENTATIONS —
 // =====================================================================
 
 // MODE 0 — SERVICE MODE
@@ -235,28 +236,161 @@ void mode_service()
 // MODE 1
 void mode1()
 {
-    OLED_DisplayText("MD1");
+    // -------------------------------
+    // VARIABILE LOCALE
+    // -------------------------------
+    String uid, data;
+    bool pin_correct = false;
+    bool tag_correct = false;
+
+    // -------------------------------
+    // PASUL 1 — INTRODUCERE PIN
+    // -------------------------------
+start_over:
+
+    pin_correct = false;
+    tag_correct = false;
+
+    OLED_Clear();
+    OLED_DisplayText("ENTER PIN");
+
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
-    OLED_DisplayText("MODE 1 ACTIVE");
+    // ignorăm ENTER gol
+    if (strlen(input) == 0) goto start_over;
 
-    // AICI scrii tu logica modului 1
-    // Exemplu:
-    // if (someCondition) doSomething();
+    // transformăm în număr
+    uint32_t pin_entered = strtoul(input, NULL, 10);
+
+    // parola ta
+    const uint32_t MODE1_PASSWORD = 9999999;
+
+    // verificare silent
+    if (pin_entered == MODE1_PASSWORD)
+        pin_correct = true;
+    else
+        pin_correct = false;
+
+    // -------------------------------
+    // PASUL 2 — CITIRE TAG RFID
+    // -------------------------------
+    OLED_Clear();
+    OLED_DisplayText("SCAN TAG");
+
+    uid = "";
+    data = "";
+
+    // blocăm până detectăm un tag
+    while (uid.length() == 0)
+    {
+        rfid_readTag(uid, data);
+        delay(100);
+    }
+
+    // parsează tag-ul
+    ParsedTagData parsed = parsePlaintext(data);
+
+    if (!parsed.valid)
+    {
+        Serial.println("❌ Tag format invalid!");
+        tag_correct = false;
+    }
+    else
+    {
+        String encrypted_info = parsed.encrypted_info;
+        uint8_t result = checkTag(uid, encrypted_info);
+
+        // doar serial debug, NU afișăm la user
+        if (result == 1)
+        {
+            Serial.println("✅ checkTag(): ACCESS GRANTED");
+            tag_correct = true;
+        }
+        else if (result == 0)
+        {
+            Serial.println("❌ checkTag(): ACCESS DENIED");
+            tag_correct = false;
+        }
+        else
+        {
+            Serial.println("⚠️ checkTag(): UNKNOWN TAG");
+            tag_correct = false;
+        }
+    }
+
+    // -------------------------------
+    // PASUL 3 — VERDICT FINAL
+    // -------------------------------
+    OLED_Clear();
+
+    if (pin_correct && tag_correct)
+    {
+        // ✔✔ AMBELE OK
+        OLED_DisplayText("413");
+        delay(2000);
+
+        // aici intră logica normală a modului 1
+        OLED_Clear();
+        OLED_DisplayText("MODE 1 ACTIVE");
+
+        Serial.println("[MODE1] ACCESS GRANTED (PIN+TAG)");
+        return;   // gata, modul rămâne activ
+    }
+    else
+    {
+        // ❌ cel putin un factor e gresit
+        OLED_DisplayText("REJECTED");
+        delay(500);
+        goto start_over;   // revine la începutul modului (PIN + TAG)
+    }
 }
 
 
 // MODE 2
 void mode2()
 {
+    String uid, data;
+    OLED_DisplayText("enter to register");
+
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
+    String confirm = String(input);
+    rfid_readTag(uid, data);
 
-    OLED_DisplayText("MODE 2 ACTIVE");
+    registerTAG(uid, "Test tag added via ESP32");
 
-    // logica modului 2
-}
+
+
+
+
+
+    if(confirm=="`"){
+
+
+
+
+ Serial.println("\n: Requesting tag info...");
+  String infoResponse = getTagInfo("TEST17112025");
+
+
+
+  if (infoResponse == "") {
+    Serial.println("❌ No response or API error");
+    return;
+  }
+
+
+
+ String tagWriteData = serverToTagPlaintext(infoResponse);
+
+ rfid_writeTag(tagWriteData);
+
+
+    } //end confirm registered tag
+
+
+}  //end module 2
 
 
 // MODE 3

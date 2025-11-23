@@ -59,6 +59,7 @@ const char* severityLabel(int code) {
 // -----------------------------------------------------------------------------
 //  NETWORK / WIFI
 // -----------------------------------------------------------------------------
+
 void connectWiFi(const char* ssid, const char* password) {
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
@@ -68,9 +69,33 @@ void connectWiFi(const char* ssid, const char* password) {
   }
   Serial.println(" connected!");
 
+  // Afișează informații despre conexiune
+  Serial.println("---- WiFi Info ----");
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  Serial.print("RSSI: ");
+  Serial.print(WiFi.RSSI());
+  Serial.println(" dBm");
+
+  Serial.print("Channel: ");
+  Serial.println(WiFi.channel());
+
+  Serial.print("Local IP: ");
+  Serial.println(WiFi.localIP());
+
+  Serial.print("Gateway IP: ");
+  Serial.println(WiFi.gatewayIP());
+
+  Serial.print("Subnet Mask: ");
+  Serial.println(WiFi.subnetMask());
+
+  Serial.print("MAC Address: ");
+  Serial.println(WiFi.macAddress());
+  Serial.println("-------------------");
+
   authenticate();
 }
-
 // -----------------------------------------------------------------------------
 //  AUTHENTICATION
 // -----------------------------------------------------------------------------

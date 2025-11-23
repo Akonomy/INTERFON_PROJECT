@@ -8,6 +8,11 @@
 #define MODE_SERVICE 0
 #define DEFAULT_START_MODE MODE_SERVICE
 
+
+
+uint32_t mode1_password = 9999999;   // 7-digit code
+
+
 extern int currentMode;
 
 void setMode(int mode);

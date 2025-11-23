@@ -546,3 +546,40 @@ ParsedTagData parsePlaintext(const String& plaintext)
     out.valid = true;
     return out;
 }
+
+
+
+
+String serverToTagPlaintext(const String& jsonResponse)
+{
+    // parse JSON
+    StaticJsonDocument<512> doc;
+    if (deserializeJson(doc, jsonResponse)) {
+        Serial.println("❌ serverToTagPlaintext: JSON parse error");
+        return "";
+    }
+
+    const char* status = doc["status"] | "error";
+
+    // dacă status nu e ok, nu generăm tag
+    if (strcmp(status, "ok") != 0) {
+        Serial.printf("❌ serverToTagPlaintext: status=%s (cannot build tag)\n", status);
+        return "";
+    }
+
+    // extragem câmpurile necesare
+    const char* owner = doc["owner"] | "";
+    const char* created = doc["created"] | "";
+    const char* encrypted_info = doc["encrypted_info"] | "";
+
+    // construim stringul plain text exact ca pe tag
+    String out = "owner=";
+    out += owner;
+    out += ";created=";
+    out += created;
+    out += ";info=";
+    out += encrypted_info;
+
+    return out;
+}
+
