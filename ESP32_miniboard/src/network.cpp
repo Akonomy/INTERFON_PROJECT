@@ -12,7 +12,7 @@
 //  CONFIG / GLOBALS
 // -----------------------------------------------------------------------------
 static const String BASE_URL = "http://akonomy.local:8000";
-static const String API_KEY = "f3109dd8c54f3ab0798c6b79756e404ed2ee350ee4b1cd9c2a7f4be40c59c57e";
+static const String API_KEY = "74356250c31b3d46bd0b74b51378e9774831dd7e8a9dd5b4e53cb83e3f2b38ee";
 static String sessionToken = "";
 
 WiFiUDP udp;
@@ -142,7 +142,7 @@ bool authenticate() {
 
   sessionToken = doc["session_token"].as<String>();
   //Serial.println("✅ Auth success. Session: " + sessionToken);
-  logSensorEvent(5, "wifi", "Wi-Fi connected successfully", 2); // notice
+  logSensorEvent(5, "wifi", "Wi-Fi connected successfully"+String(WiFi.RSSI()) , 2); // notice
   return true;
 }
 

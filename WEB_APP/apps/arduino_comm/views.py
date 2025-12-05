@@ -179,28 +179,65 @@ def request_challenge(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST only"}, status=405)
 
+    # Step 1: Try to load JSON
     try:
-        data = json.loads(request.body.decode() or "{}")
-    except Exception:
+        raw_body = request.body.decode() or "{}"
+        print("📥 Raw request body:", raw_body)
+        data = json.loads(raw_body)
+    except Exception as e:
+        print("⚠️ Failed to decode JSON:", e)
         data = request.POST.dict()
 
+    print("📦 Parsed data:", data, "| Type:", type(data))
+
+    # Step 2: Extract API key
     key = data.get("key")
+
+    if isinstance(key, (list, tuple)):
+        print("⚠️ Key is a list/tuple:", key)
+        key = key[0] if key else None
+
+    print("🔑 Received API key:", key)
+
     if not key:
+        print("❌ No key provided")
         return JsonResponse({"error": "Missing key"}, status=400)
 
+    # Step 3: Try to find device (Djongo-safe: no AND conditions)
     try:
-        device = DEVICE.objects.get(api_key=key, is_active=True)
+        device = DEVICE.objects.get(api_key=key)
     except DEVICE.DoesNotExist:
+        print("❌ API key NOT FOUND:", key)
         return JsonResponse({"status": "garbage", "nonce": random_garbage_hex()}, status=200)
 
+    # Djongo-safe separate active check
+    if not device.is_active:
+        print("❌ Device exists but is NOT ACTIVE:", device.name)
+        return JsonResponse({"status": "garbage", "nonce": random_garbage_hex()}, status=200)
+
+    print(f"✔ Device found: {device.name} (active={device.is_active})")
+
+    # Step 4: Issue the challenge
     nonce_bytes = secrets.token_bytes(16)
     nonce_b64 = base64.b64encode(nonce_bytes).decode('ascii')
     ts = int(dj_tz.now().timestamp())
 
     cache_key = f"challenge:{device.id}:{nonce_b64}"
-    cache.set(cache_key, {"device_id": device.id, "key": device.api_key, "ts": ts}, timeout=CHALLENGE_TTL)
+    cache.set(
+        cache_key,
+        {"device_id": device.id, "key": device.api_key, "ts": ts},
+        timeout=CHALLENGE_TTL
+    )
 
-    return JsonResponse({"status": "ok", "nonce": nonce_b64, "ts": ts, "min_delay_seconds": MIN_RESPONSE_DELAY}, status=200)
+    print("✅ Challenge issued for device:", device.name)
+    print("🧾 Nonce:", nonce_b64, "| Timestamp:", ts)
+
+    return JsonResponse({
+        "status": "ok",
+        "nonce": nonce_b64,
+        "ts": ts,
+        "min_delay_seconds": MIN_RESPONSE_DELAY
+    }, status=200)
 
 
 
@@ -425,11 +462,15 @@ def respond_challenge(request):
         challenge = cache.get(cache_key)
     else:
         try:
-            device = DEVICE.objects.get(api_key=key, is_active=True)
-            cache_key = f"challenge:{device.id}:{nonce_b64}"
-            challenge = cache.get(cache_key)
+            device = DEVICE.objects.get(api_key=key)
         except DEVICE.DoesNotExist:
-            challenge = None
+            return JsonResponse({"status": "invalid", "reason": "no_device"}, status=200)
+
+        if not device.is_active:
+            return JsonResponse({"status": "invalid", "reason": "inactive_device"}, status=403)
+
+        cache_key = f"challenge:{device.id}:{nonce_b64}"
+        challenge = cache.get(cache_key)
 
     if not challenge:
         return JsonResponse({"status": "invalid", "reason": "no_challenge", "garbage": random_garbage_hex()}, status=200)

@@ -453,10 +453,12 @@ bool rfid_readTag(String &uidHex, String &decoded)
 
     if (rfid_tag.type == RFID_TYPE_MIFARE_1K) {
         ok = mifare_readRaw(buf, RFID_MAX_DATA, len);
+        Serial.println("MIFARE.");
     }
     else if (rfid_tag.type == RFID_TYPE_NTAG_21x ||
              rfid_tag.type == RFID_TYPE_ULTRALIGHT) {
         ok = ntag_readRaw(buf, RFID_MAX_DATA, len);
+        Serial.println("NTAG.");
     } else {
         Serial.println("⚠️ Tip tag necunoscut → nu se poate citi RAW.");
         return false;

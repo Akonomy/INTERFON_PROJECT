@@ -1,92 +1,127 @@
 #include <Arduino.h>
+#include <Wire.h>
+#include <WiFi.h>
+
 #include "network.h"
 #include "gpio.h"
 #include "keyboard.h"
 #include "oled.h"
 #include "rfid.h"
-#include <Wire.h>
 #include "main.h"
 
 #define MAX_INPUT_LEN 16
 
+// ════════════════════════════════════════════════════════════════
+// 📌 GLOBAL STATE & CONFIGURATION
+// ════════════════════════════════════════════════════════════════
 
+bool canLog = true;
+unsigned long lastLogTime = 0;
+const unsigned long logInterval = 3000;  // legacy (unused)
 
+int currentMode = DEFAULT_START_MODE;
 
 char currentInput[MAX_INPUT_LEN + 1]; // +1 for null terminator
 int inputLength = 0;
 
-void updateDisplay() {
-  currentInput[inputLength] = '\0'; // make sure it’s null-terminated
-  OLED_DisplayText(currentInput);
-  Serial.print("Input: ");
-  Serial.println(currentInput);
-}
+time_t lastLogEpoch = 0;
+const unsigned long logIntervalSecs = 60;  // new log interval in seconds
 
-
-
-
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-  //connectWiFi("C004", "53638335");
-    connectWiFi();
-  GPIO_INIT();
-  OLED_Init();
-  KEYBOARD_INIT();
-
-  // (opțional) sincronizare timp
-syncTime();
-OLED_DisplayText("READY");
-
-logSensorEvent(6, "system", "ESP32 boot completed", 2);     // info → syslog only
-
-logSensorEvent(6, "diagnostics", "System entering DEBUG mode", 2); // debug
-
-
-rfid_init();
-
-  initServiceSequence();
-logSensorEvent(6, "system", "ACCES CONTROL INITIALIZAT", 2); // debug
-
-
-}
-
-
-
-
-
-
-int currentMode = DEFAULT_START_MODE;
-
-// =====================================================================
-// SERVICE ENTRY SEQUENCE (3 coduri + 3 ENTER + timeout 2 min)
-// =====================================================================
-String serviceSteps[3] = { "123" ,"321" ,"111" };
-
+// ───── Service Mode State ─────
+String serviceSteps[3] = { "123", "321", "111" };
 int serviceStepIndex = 0;
 int serviceEnterCount = 0;
 bool serviceActive = false;
 unsigned long serviceStartTime = 0;
 
-void initServiceSequence()
-{
+// ════════════════════════════════════════════════════════════════
+// 🔧 UTILITY FUNCTIONS
+// ════════════════════════════════════════════════════════════════
+
+void blockLogs() {
+    canLog = false;
+    Serial.println("[LOG] Logging temporarily blocked");
+}
+
+void allowLogs() {
+    canLog = true;
+    Serial.println("[LOG] Logging allowed");
+}
+
+void updateDisplay() {
+    currentInput[inputLength] = '\0'; // make sure it’s null-terminated
+    OLED_DisplayText(currentInput);
+    Serial.print("Input: ");
+    Serial.println(currentInput);
+}
+
+// ════════════════════════════════════════════════════════════════
+// 📝 LOGGING FUNCTION
+// ════════════════════════════════════════════════════════════════
+
+void LogStuff() {
+    if (!canLog) return;
+
+    time_t now = time(nullptr);
+    if (now == 0) return;
+
+    if ((now - lastLogEpoch) < 60) return;
+    lastLogEpoch = now;
+
+    int rssi = WiFi.RSSI();  // Wi-Fi signal strength (dBm)
+    unsigned long uptime = millis() / 1000;
+
+    // LOW SIGNAL → minimal logging + higher priority
+    if (rssi < -75) {
+        char msg[64];
+        snprintf(msg, sizeof(msg),
+            "[WIFI-LOW] RSSI=%d dBm | Uptime=%lus", rssi, uptime);
+
+        int severity = (rssi < -85) ? 2 : 4;  // 2 = critical, 4 = warning
+        logSensorEvent(severity, "wifi", msg, 2);
+        return;
+    }
+
+    // GOOD SIGNAL → log full system info
+    uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t minFreeHeap = ESP.getMinFreeHeap();
+    uint32_t heapSize = ESP.getHeapSize();
+    uint32_t freePsram = ESP.getFreePsram();
+    const char* resetReason = esp_reset_reason() == ESP_RST_POWERON ? "PowerOn" : "Other";
+
+    char msg[160];
+    snprintf(msg, sizeof(msg),
+        "[SYS] RSSI=%d dBm | Heap=%lu/%lu | Min=%lu | PSRAM=%lu | Uptime=%lus | Reset=%s",
+        rssi, freeHeap, heapSize, minFreeHeap, freePsram, uptime, resetReason);
+
+    logSensorEvent(6, "system", msg, 2);  // 6 = info
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// 🔧 SERVICE MODE LOGIC
+// ════════════════════════════════════════════════════════════════
+
+void initServiceSequence() {
     resetServiceSequence();
 }
 
-void resetServiceSequence()
-{
+void resetServiceSequence() {
     serviceStepIndex = 0;
     serviceEnterCount = 0;
     serviceActive = false;
 }
 
-void globalServiceMonitor(char* input)
-{
+void globalServiceMonitor(char* input) {
+    if (strchr(input, '@') != NULL) {
+        Serial.println("[SERVICE] Invalid input — '@' is not allowed. Skipping service monitor.");
+        resetServiceSequence();
+        return;
+    }
+
     unsigned long now = millis();
 
-    // timeout 2 minute
-    if (serviceActive && (now - serviceStartTime > 60000)) {  // timeout 1 minut
-        Serial.println("[SERVICE] Timeout → reset sequence");
+    if (serviceActive && (now - serviceStartTime > 60000)) {
         resetServiceSequence();
         return;
     }
@@ -96,73 +131,65 @@ void globalServiceMonitor(char* input)
 
     String val = String(input);
 
-    // ENTER confirmation (input = "")
-    if (val == "`" && serviceStepIndex == 3)
-    {
+    if (val == "`" && serviceStepIndex == 3) {
         serviceEnterCount++;
-
-        Serial.print("[SERVICE] ENTER press ");
-        Serial.print(serviceEnterCount);
-        Serial.println("/3");
-
         if (serviceEnterCount >= 3)
             enterServiceMode();
-
         return;
     }
 
-    // checking the 3-step sequence
-    if (serviceStepIndex < 3)
-    {
-        Serial.print("[SERVICE] Input received: ");
-        Serial.println(val);
-
-        if (val == serviceSteps[serviceStepIndex])
-        {
-            Serial.print("[SERVICE] Step ");
-            Serial.print(serviceStepIndex + 1);
-            Serial.println(" OK");
-
+    if (serviceStepIndex < 3) {
+        if (val == serviceSteps[serviceStepIndex]) {
             if (!serviceActive) {
                 serviceStartTime = now;
-                Serial.println("[SERVICE] Starting service sequence timer");
             }
-
             serviceActive = true;
             serviceStepIndex++;
-
-            if (serviceStepIndex == 3) {
-                Serial.println("[SERVICE] All 3 codes OK. Waiting for 3×ENTER.");
-                OLED_DisplayText("Press ENTER 3x");
-            }
-
             return;
-        }
-        else
-        {
+        } else {
             Serial.print("[SERVICE] WRONG code at step ");
             Serial.println(serviceStepIndex + 1);
-            Serial.print("[SERVICE] Expected: ");
-            Serial.println(serviceSteps[serviceStepIndex]);
-            Serial.print("[SERVICE] Received: ");
-            Serial.println(val);
-
             resetServiceSequence();
             return;
         }
     }
 }
 
-
-void enterServiceMode()
-{
+void enterServiceMode() {
     currentMode = MODE_SERVICE;
     resetServiceSequence();
-
     OLED_Clear();
     OLED_DisplayText("SERVICE MODE");
-
 }
+
+// ════════════════════════════════════════════════════════════════
+// 🚀 SETUP FUNCTION
+// ════════════════════════════════════════════════════════════════
+
+void setup() {
+    Serial.begin(115200);
+    delay(500);
+
+    connectWiFi("C004","53638335");
+    GPIO_INIT();
+    OLED_Init();
+    KEYBOARD_INIT();
+    rfid_init();
+
+    syncTime();
+
+    logSensorEvent(6, "system", "ESP32 boot completed", 2);
+
+    initServiceSequence();
+
+    OLED_DisplayText("READY");
+}
+
+
+
+
+
+
 
 
 
@@ -180,6 +207,7 @@ void setMode(int mode)
 
 void runCurrentMode()
 {
+
     switch (currentMode)
     {
         case 0: mode_service(); break;
@@ -199,6 +227,13 @@ void runCurrentMode()
 
 
 
+
+
+
+
+
+
+
 // =====================================================================
 // MODE IMPLEMENTATIONS —
 // =====================================================================
@@ -206,8 +241,16 @@ void runCurrentMode()
 // MODE 0 — SERVICE MODE
 void mode_service()
 {
+    LogStuff();
     OLED_DisplayText("SERVICE");
     char* input = KEYBOARD_READ(0);
+
+    // ───── Skip special control returns ─────
+    if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0) {
+        Serial.println("[MODE 0] Input timeout or idle → ignoring input.");
+        return;
+    }
+
     globalServiceMonitor(input);
 
     OLED_DisplayText("MODE 0 - SERVICE");
@@ -224,7 +267,6 @@ void mode_service()
         delay(400);
 
         setMode(target);
-
     }
     else
     {
@@ -236,6 +278,7 @@ void mode_service()
 // MODE 1
 void mode1()
 {
+    LogStuff();
     // -------------------------------
     // VARIABILE LOCALE
     // -------------------------------
@@ -257,14 +300,18 @@ start_over:
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
-    // ignorăm ENTER gol
-    if (strlen(input) == 0) goto start_over;
+    // ignorăm ENTER gol sau timeout
+    if ((strlen(input) == 0) || (strchr(input, '@') != NULL)) goto start_over;
+
+
+
+
 
     // transformăm în număr
     uint32_t pin_entered = strtoul(input, NULL, 10);
 
     // parola ta
-    const uint32_t MODE1_PASSWORD = 9999999;
+    const uint32_t MODE1_PASSWORD = 999999;
 
     // verificare silent
     if (pin_entered == MODE1_PASSWORD)
@@ -272,7 +319,7 @@ start_over:
     else
         pin_correct = false;
 
-    // -------------------------------
+    // -------------------------------+
     // PASUL 2 — CITIRE TAG RFID
     // -------------------------------
     OLED_Clear();
@@ -282,11 +329,29 @@ start_over:
     data = "";
 
     // blocăm până detectăm un tag
-    while (uid.length() == 0)
-    {
-        rfid_readTag(uid, data);
-        delay(100);
-    }
+    unsigned long startTime = millis();
+unsigned long timeout = 10000; //  seconds timeout10
+
+// blocăm până detectăm un tag sau până expiră timpul
+while (uid.length() == 0 && (millis() - startTime < timeout))
+{
+    rfid_readTag(uid, data);
+    delay(100); // gentle pause so your MCU doesn’t catch fire
+}
+
+if (uid.length() == 0)
+{
+    // Tag not detected within timeout
+    Serial.println("Timeout: No RFID tag detected.");
+    tag_correct = false;
+}
+else
+{
+    // Tag detected
+    Serial.print("Tag detected: ");
+    Serial.println(uid);
+
+
 
     // parsează tag-ul
     ParsedTagData parsed = parsePlaintext(data);
@@ -319,6 +384,13 @@ start_over:
         }
     }
 
+
+
+
+
+}
+
+
     // -------------------------------
     // PASUL 3 — VERDICT FINAL
     // -------------------------------
@@ -350,28 +422,30 @@ start_over:
 // MODE 2
 void mode2()
 {
+
     String uid, data;
+    OLED_Clear();
     OLED_DisplayText("enter to register");
 
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
     String confirm = String(input);
-    rfid_readTag(uid, data);
+
 
     registerTAG(uid, "Test tag added via ESP32");
-
+     Serial.println(confirm);
 
 
 
 
 
     if(confirm=="`"){
-
-
+OLED_Clear();
+rfid_readTag(uid, data);
 
 
  Serial.println("\n: Requesting tag info...");
-  String infoResponse = getTagInfo("TEST17112025");
+    String infoResponse = getTagInfo(uid);
 
 
 
@@ -379,15 +453,22 @@ void mode2()
     Serial.println("❌ No response or API error");
     return;
   }
+  OLED_Clear();
+ OLED_DisplayText("RFID+ENTER");
 
+char* input = KEYBOARD_READ(0);
 
+String confirm = String(input);
 
+  if(confirm=="`"){
  String tagWriteData = serverToTagPlaintext(infoResponse);
 
  rfid_writeTag(tagWriteData);
 
 
-    } //end confirm registered tag
+    }
+    }
+ //end confirm registered tag
 
 
 }  //end module 2
@@ -396,6 +477,7 @@ void mode2()
 // MODE 3
 void mode3()
 {
+    LogStuff();
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
@@ -406,6 +488,7 @@ void mode3()
 // MODE 4
 void mode4()
 {
+    LogStuff();
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 

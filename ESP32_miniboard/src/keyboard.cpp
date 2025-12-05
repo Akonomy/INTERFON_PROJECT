@@ -243,28 +243,62 @@ char* KEYBOARD_READ(uint8_t mode)
     int index = 0;
     bool isPassword = (mode == 2);
 
-    // Selectăm dimensiunea textului pentru afișaj
     uint8_t textSize = (mode == 1) ? 2 : 3;
 
+    const unsigned long inputTimeout = 15000; // 15 seconds to finish typing
+    const unsigned long idleTimeout = 5000;   // 5 seconds no key at all = return
 
-
+    unsigned long lastKeyTime = millis();     // last key press time
+    unsigned long startTime = millis();       // total idle time
 
     while (true)
     {
         char ch;
+        KeyEvent ev;
 
         if (mode == 1)
         {
             ch = KEYBOARD_READ_CHAR();
-            if (ch == '\0') continue;
+            if (ch == '\0') {
+                // check timeouts
+                if (millis() - lastKeyTime > inputTimeout && index > 0) {
+                    Serial.println("⏱️ INPUT TIMEOUT → discarding partial input");
+                    return (char*)"@TIME";
+                }
+
+                if (millis() - startTime > idleTimeout && index == 0) {
+                    Serial.println("💤 IDLE TIMEOUT → no key pressed at all");
+                    return (char*)"@NONE";
+                }
+
+                delay(50);
+                continue;
+            }
         }
         else
         {
-            KeyEvent ev = KEYBOARD_READ_KEY();
-            if (ev.type == KEY_NONE) continue;
+            ev = KEYBOARD_READ_KEY();
+            if (ev.type == KEY_NONE) {
+                // same timeout checks
+                if (millis() - lastKeyTime > inputTimeout && index > 0) {
+                    Serial.println("⏱️ INPUT TIMEOUT → discarding partial input");
+                    return (char*)"@TIME";
+                }
+
+                if (millis() - startTime > idleTimeout && index == 0) {
+                   // Serial.println("💤 IDLE TIMEOUT → no key pressed at all");
+                    return (char*)"@NONE";
+                }
+
+                delay(50);
+                continue;
+            }
             ch = ev.value;
         }
 
+        // key was pressed — reset timers
+        lastKeyTime = millis();
+        startTime = millis(); // restart idle timeout too
 
         // ENTER (#)
         if (ch == '#')
@@ -273,14 +307,11 @@ char* KEYBOARD_READ(uint8_t mode)
 
             if (index == 0)
             {
-                // return empty string
                 buffer[0] = '`';
-
             }
 
+            Serial.println("🔓 ENTER pressed → returning input:");
             Serial.println(buffer);
-
-
             return buffer;
         }
 
@@ -294,16 +325,10 @@ char* KEYBOARD_READ(uint8_t mode)
             }
 
             OLED_Clear();
-
             if (!isPassword)
-            {
                 OLED_DisplayText(buffer, textSize);
-            }
             else
-            {
                 OLED_DisplayText("``", textSize);
-
-            }
             continue;
         }
 
@@ -314,37 +339,27 @@ char* KEYBOARD_READ(uint8_t mode)
             OLED_DisplayText("MAX LIMIT", 2);
             delay(400);
             OLED_Clear();
-
-            if (!isPassword){
+            if (!isPassword)
                 OLED_DisplayText(buffer, textSize);
-            }
-            else{
-                OLED_Clear();
+            else
                 OLED_DisplayText("``", 3);
-            }
-
             continue;
         }
 
         // ADD CHARACTER
-        if (ch != '*' || ch != '#' || index < maxLen){
-        buffer[index++] = ch;
-        buffer[index] = '\0';
+        if (ch != '*' && ch != '#') {
+            buffer[index++] = ch;
+            buffer[index] = '\0';
 
-        OLED_Clear();
-        if (!isPassword)
-        {
-            OLED_DisplayText(buffer, textSize);
-        }
-        else
-        {
             OLED_Clear();
-            OLED_DisplayText("``", 3);
-            OLED_Update();
+            if (!isPassword)
+                OLED_DisplayText(buffer, textSize);
+            else {
+                OLED_Clear();
+                OLED_DisplayText("``", 3);
+            }
         }
-    }
 
-      OLED_Update();
-
+        OLED_Update();
     }
 }
