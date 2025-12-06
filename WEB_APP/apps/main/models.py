@@ -1,3 +1,5 @@
 from django.contrib.auth.models import AbstractUser
-from bson.objectid import ObjectId
+from djongo import models
 
+class User(AbstractUser):
+    _id = models.ObjectIdField(primary_key=True)

@@ -132,12 +132,14 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
 )
 
+
+
 LOGIN_URL = '/login/'  # Redirect here if not logged in
 LOGIN_REDIRECT_URL = '/dashboard/'  # Where to redirect after successful login
 LOGOUT_REDIRECT_URL = '/login/'  # Redirect after logout
 
 # Custom user model
-AUTH_USER_MODEL = 'auth.User'
+AUTH_USER_MODEL = "main.User"
 
 
 # Enable Django-Heroku for deployment

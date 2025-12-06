@@ -25,7 +25,7 @@ char currentInput[MAX_INPUT_LEN + 1]; // +1 for null terminator
 int inputLength = 0;
 
 time_t lastLogEpoch = 0;
-const unsigned long logIntervalSecs = 60;  // new log interval in seconds
+const unsigned long logIntervalSecs = 30;  // new log interval in seconds
 
 // ───── Service Mode State ─────
 String serviceSteps[3] = { "123", "321", "111" };
@@ -65,7 +65,7 @@ void LogStuff() {
     time_t now = time(nullptr);
     if (now == 0) return;
 
-    if ((now - lastLogEpoch) < 60) return;
+    if ((now - lastLogEpoch) < 6 0) return;
     lastLogEpoch = now;
 
     int rssi = WiFi.RSSI();  // Wi-Fi signal strength (dBm)
@@ -247,16 +247,16 @@ void mode_service()
 
     // ───── Skip special control returns ─────
     if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0) {
-        Serial.println("[MODE 0] Input timeout or idle → ignoring input.");
+
         return;
     }
 
-    globalServiceMonitor(input);
-
-    OLED_DisplayText("MODE 0 - SERVICE");
-
     if (strlen(input) == 0)
         return;
+
+
+    globalServiceMonitor(input);
+
 
     int target = atoi(input);
 
@@ -314,11 +314,14 @@ start_over:
     const uint32_t MODE1_PASSWORD = 999999;
 
     // verificare silent
-    if (pin_entered == MODE1_PASSWORD)
+    if (pin_entered == MODE1_PASSWORD){
         pin_correct = true;
-    else
+         Serial.println("PASS OK");
+}
+    else {
         pin_correct = false;
-
+         Serial.println("PASS WRONG");
+    }
     // -------------------------------+
     // PASUL 2 — CITIRE TAG RFID
     // -------------------------------
@@ -432,21 +435,26 @@ void mode2()
     String confirm = String(input);
 
 
-    registerTAG(uid, "Test tag added via ESP32");
-     Serial.println(confirm);
-
-
 
 
 
     if(confirm=="`"){
+Serial.println("CONFIRMAT PAS 1");
 OLED_Clear();
 rfid_readTag(uid, data);
 
 
+
+Serial.println(uid);
+registerTAG(uid, "Test tag added via ESP32");
+Serial.println(confirm);
+ OLED_DisplayText("INREGISTRARE");
+Serial.println("15 SEC FROM NOW");
+delay(15000);
+
  Serial.println("\n: Requesting tag info...");
     String infoResponse = getTagInfo(uid);
-
+Serial.println(infoResponse);
 
 
   if (infoResponse == "") {
@@ -456,19 +464,16 @@ rfid_readTag(uid, data);
   OLED_Clear();
  OLED_DisplayText("RFID+ENTER");
 
-char* input = KEYBOARD_READ(0);
 
-String confirm = String(input);
-
-  if(confirm=="`"){
+OLED_DisplayText("DO NOT REMOVE TAG!");
  String tagWriteData = serverToTagPlaintext(infoResponse);
 
  rfid_writeTag(tagWriteData);
 
 
     }
-    }
  //end confirm registered tag
+Serial.println("END");
 
 
 }  //end module 2
