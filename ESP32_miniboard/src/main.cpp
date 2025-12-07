@@ -113,6 +113,7 @@ void resetServiceSequence() {
 }
 
 void globalServiceMonitor(char* input) {
+
     if (strchr(input, '@') != NULL) {
         Serial.println("[SERVICE] Invalid input — '@' is not allowed. Skipping service monitor.");
         resetServiceSequence();
@@ -121,7 +122,7 @@ void globalServiceMonitor(char* input) {
 
     unsigned long now = millis();
 
-    if (serviceActive && (now - serviceStartTime > 60000)) {
+    if (serviceActive && (now - serviceStartTime > 15000)) {
         resetServiceSequence();
         return;
     }
@@ -131,14 +132,24 @@ void globalServiceMonitor(char* input) {
 
     String val = String(input);
 
-    if (val == "`" && serviceStepIndex == 3) {
+    Serial.println(serviceStepIndex);
+
+    if (val == "`" && serviceStepIndex >= 2) {
+        Serial.print("[SERVICE]>>>");
         serviceEnterCount++;
-        if (serviceEnterCount >= 3)
+         Serial.print(serviceEnterCount);
+         Serial.println("[SERVICE]>>>");
+        if (serviceEnterCount >= 2)
+
             enterServiceMode();
+            Serial.print("[SERVICE]>>SUCCES");
         return;
     }
 
     if (serviceStepIndex < 3) {
+        Serial.print(">>>[SERVICE]");
+           Serial.print(serviceSteps[serviceStepIndex]);
+              Serial.println(">>>[SERVICE]");
         if (val == serviceSteps[serviceStepIndex]) {
             if (!serviceActive) {
                 serviceStartTime = now;
@@ -147,8 +158,12 @@ void globalServiceMonitor(char* input) {
             serviceStepIndex++;
             return;
         } else {
+            Serial.print("[SERVICE] received : ");
+            Serial.println(val);
             Serial.print("[SERVICE] WRONG code at step ");
+
             Serial.println(serviceStepIndex + 1);
+
             resetServiceSequence();
             return;
         }
@@ -275,150 +290,141 @@ void mode_service()
     }
 }
 
-
-// MODE 1
 void mode1()
 {
     LogStuff();
-    // -------------------------------
-    // VARIABILE LOCALE
-    // -------------------------------
     String uid, data;
-    bool pin_correct = false;
-    bool tag_correct = false;
 
-    // -------------------------------
-    // PASUL 1 — INTRODUCERE PIN
-    // -------------------------------
 start_over:
 
-    pin_correct = false;
-    tag_correct = false;
+    bool pin_correct = false;
+    bool tag_correct = false;
+    unsigned long idleStart = millis();
 
     OLED_Clear();
     OLED_DisplayText("ENTER PIN");
 
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
-
-    // ignorăm ENTER gol sau timeout
-    if ((strlen(input) == 0) || (strchr(input, '@') != NULL)) goto start_over;
+    while (millis() - idleStart < 15000)
+    {
+        char* input = KEYBOARD_READ(0);
 
 
+        if (strcmp(input, "@") == 0 || strlen(input) == 0) goto start_over;
 
+        // ─── Entered "1" → possible service entry ───
+        if (strcmp(input, "1") == 0)
+        {
+            OLED_Clear();
+            OLED_DisplayText("SCAN TAG...");
+            delay(5000); // fake wait
+            OLED_Clear();
+            OLED_DisplayText("WAITING...");
 
+            // Now wait for Enter to begin service sequence
+            while (true) {
+                char* in = KEYBOARD_READ(0);
 
-    // transformăm în număr
-    uint32_t pin_entered = strtoul(input, NULL, 10);
+                if (strcmp(in, "@") == 0) continue;
+                if (strcmp(in, "`") == 0) break;
 
-    // parola ta
-    const uint32_t MODE1_PASSWORD = 999999;
+                // Any other input = restart
+                goto start_over;
+            }
 
-    // verificare silent
-    if (pin_entered == MODE1_PASSWORD){
-        pin_correct = true;
-         Serial.println("PASS OK");
-}
-    else {
-        pin_correct = false;
-         Serial.println("PASS WRONG");
+            // Start collecting service codes
+            for (int i = 0; i < 6; i++) {
+                OLED_Clear();
+                OLED_DisplayText("SCAN TAG...");
+                delay(600);
+
+                char* stepInput = KEYBOARD_READ(0);
+                globalServiceMonitor(stepInput);
+
+                // Fake error to mask service input
+                const char* fakeErr[] = {
+                    "TAG FAIL", "DECRYPT ERR", "CALL SERVICE",
+                    "CORRUPT TAG", "RFID TIMEOUT", "UNKNOWN TAG"
+                };
+                OLED_Clear();
+                OLED_DisplayText(fakeErr[random(0, 6)]);
+                delay(800);
+            }
+
+            // After 6 fake steps, restart loop in case service failed
+            goto start_over;
+        }
+
+        // ─── Normal PIN entry ───
+        uint32_t pin = strtoul(input, NULL, 10);
+        if (pin == 999999) {
+            pin_correct = true;
+        }
+        break;
     }
-    // -------------------------------+
-    // PASUL 2 — CITIRE TAG RFID
-    // -------------------------------
+
+    // ==============================
+    // RFID SCAN STEP
+    // ==============================
     OLED_Clear();
     OLED_DisplayText("SCAN TAG");
 
     uid = "";
     data = "";
+    unsigned long scanStart = millis();
 
-    // blocăm până detectăm un tag
-    unsigned long startTime = millis();
-unsigned long timeout = 10000; //  seconds timeout10
+    while (millis() - scanStart < 10000)
+    {
+        rfid_readTag(uid, data);
 
-// blocăm până detectăm un tag sau până expiră timpul
-while (uid.length() == 0 && (millis() - startTime < timeout))
-{
-    rfid_readTag(uid, data);
-    delay(100); // gentle pause so your MCU doesn’t catch fire
-}
+        if (uid.length() > 0) break;
 
-if (uid.length() == 0)
-{
-    // Tag not detected within timeout
-    Serial.println("Timeout: No RFID tag detected.");
-    tag_correct = false;
-}
-else
-{
-    // Tag detected
-    Serial.print("Tag detected: ");
-    Serial.println(uid);
+        char* input = KEYBOARD_READ(0);
 
 
+        if (strcmp(input, "@") != 0 && strcmp(input, "`") != 0)
+            goto start_over;
 
-    // parsează tag-ul
+        delay(100);
+    }
+
+    if (uid.length() == 0) {
+        OLED_Clear();
+        OLED_DisplayText("TAG FAIL");
+        delay(1000);
+        goto start_over;
+    }
+
+    // ==============================
+    // PARSE TAG & CHECK
+    // ==============================
     ParsedTagData parsed = parsePlaintext(data);
-
-    if (!parsed.valid)
-    {
-        Serial.println("❌ Tag format invalid!");
-        tag_correct = false;
-    }
-    else
-    {
-        String encrypted_info = parsed.encrypted_info;
-        uint8_t result = checkTag(uid, encrypted_info);
-
-        // doar serial debug, NU afișăm la user
-        if (result == 1)
-        {
-            Serial.println("✅ checkTag(): ACCESS GRANTED");
-            tag_correct = true;
-        }
-        else if (result == 0)
-        {
-            Serial.println("❌ checkTag(): ACCESS DENIED");
-            tag_correct = false;
-        }
-        else
-        {
-            Serial.println("⚠️ checkTag(): UNKNOWN TAG");
-            tag_correct = false;
-        }
+    if (!parsed.valid) {
+        OLED_Clear();
+        OLED_DisplayText("TAG ERROR");
+        delay(1000);
+        goto start_over;
     }
 
+    if (checkTag(uid, parsed.encrypted_info) == 1)
+        tag_correct = true;
 
-
-
-
-}
-
-
-    // -------------------------------
-    // PASUL 3 — VERDICT FINAL
-    // -------------------------------
+    // ==============================
+    // FINAL RESULT
+    // ==============================
     OLED_Clear();
-
     if (pin_correct && tag_correct)
     {
-        // ✔✔ AMBELE OK
         OLED_DisplayText("413");
-        delay(2000);
-
-        // aici intră logica normală a modului 1
+        delay(1500);
         OLED_Clear();
         OLED_DisplayText("MODE 1 ACTIVE");
-
-        Serial.println("[MODE1] ACCESS GRANTED (PIN+TAG)");
-        return;   // gata, modul rămâne activ
+        Serial.println("[MODE1] ACCESS GRANTED");
+        return;
     }
     else
     {
-        // ❌ cel putin un factor e gresit
         OLED_DisplayText("REJECTED");
-        delay(500);
-        goto start_over;   // revine la începutul modului (PIN + TAG)
+        delay(1000);
     }
 }
 
