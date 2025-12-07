@@ -65,7 +65,7 @@ void LogStuff() {
     time_t now = time(nullptr);
     if (now == 0) return;
 
-    if ((now - lastLogEpoch) < 6 0) return;
+    if ((now - lastLogEpoch) < 60) return;
     lastLogEpoch = now;
 
     int rssi = WiFi.RSSI();  // Wi-Fi signal strength (dBm)
@@ -170,7 +170,8 @@ void setup() {
     Serial.begin(115200);
     delay(500);
 
-    connectWiFi("C004","53638335");
+    //connectWiFi("C004","53638335");
+    connectWiFi("Minerii din bomboclat","castravete");
     GPIO_INIT();
     OLED_Init();
     KEYBOARD_INIT();
@@ -422,61 +423,133 @@ else
 }
 
 
-// MODE 2
 void mode2()
 {
-
     String uid, data;
     OLED_Clear();
-    OLED_DisplayText("enter to register");
+    OLED_DisplayText("Press ENTER to start");
 
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
-    String confirm = String(input);
-
-
-
-
-
-    if(confirm=="`"){
-Serial.println("CONFIRMAT PAS 1");
-OLED_Clear();
-rfid_readTag(uid, data);
-
-
-
-Serial.println(uid);
-registerTAG(uid, "Test tag added via ESP32");
-Serial.println(confirm);
- OLED_DisplayText("INREGISTRARE");
-Serial.println("15 SEC FROM NOW");
-delay(15000);
-
- Serial.println("\n: Requesting tag info...");
-    String infoResponse = getTagInfo(uid);
-Serial.println(infoResponse);
-
-
-  if (infoResponse == "") {
-    Serial.println("❌ No response or API error");
-    return;
-  }
-  OLED_Clear();
- OLED_DisplayText("RFID+ENTER");
-
-
-OLED_DisplayText("DO NOT REMOVE TAG!");
- String tagWriteData = serverToTagPlaintext(infoResponse);
-
- rfid_writeTag(tagWriteData);
-
-
+    // Wait for ENTER to start
+    while (true) {
+        char* input = KEYBOARD_READ(0);
+        globalServiceMonitor(input);
+        if (String(input) == "`") break;
     }
- //end confirm registered tag
-Serial.println("END");
 
+read_tag_again:
 
-}  //end module 2
+    OLED_Clear();
+    OLED_DisplayText("Approach tag...");
+
+    // Try reading the RFID tag
+    bool tagReadSuccess = rfid_readTag(uid, data);
+
+    while (!tagReadSuccess) {
+        OLED_Clear();
+        OLED_DisplayText("Tag not found\n1-Service\n2-Retry");
+
+        while (true) {
+            char* input = KEYBOARD_READ(0);
+            globalServiceMonitor(input);
+            String choice = String(input);
+
+            if (choice == "1") {
+                Serial.println("[MODE2] Switching to SERVICE MODE...");
+                enterServiceMode();
+                return;
+            } else if (choice == "2") {
+                OLED_Clear();
+                OLED_DisplayText("Retrying...\nApproach tag");
+                tagReadSuccess = rfid_readTag(uid, data);
+                if (tagReadSuccess) break;
+            }
+        }
+    }
+
+    Serial.println("[MODE2] Tag detected:");
+    Serial.println(uid);
+    OLED_Clear();
+    OLED_DisplayText("Tag OK\nPress ENTER");
+
+    // Confirm before registering tag
+    while (true) {
+        char* input = KEYBOARD_READ(0);
+        globalServiceMonitor(input);
+        if (String(input) == "`") break;
+    }
+
+    registerTAG(uid, "Test tag added via ESP32");
+    Serial.println("[MODE2] Tag registered");
+
+    OLED_Clear();
+    OLED_DisplayText("Registered\nPress ENTER");
+
+    // Confirm before next step
+    while (true) {
+        char* input = KEYBOARD_READ(0);
+        globalServiceMonitor(input);
+        if (String(input) == "`") break;
+    }
+
+    Serial.println("[MODE2] Requesting tag info from server...");
+    String infoResponse = getTagInfo(uid);
+    Serial.println(infoResponse);
+
+    if (infoResponse == "") {
+        Serial.println("❌ API error: No response");
+        OLED_Clear();
+        OLED_DisplayText("API ERROR");
+        return;
+    }
+
+    OLED_Clear();
+    OLED_DisplayText("Info OK\nPress ENTER");
+
+    // Confirm before writing
+    while (true) {
+        char* input = KEYBOARD_READ(0);
+        globalServiceMonitor(input);
+        if (String(input) == "`") break;
+    }
+
+    // Prepare to write tag
+    String tagWriteData = serverToTagPlaintext(infoResponse);
+    Serial.println("[MODE2] Data to be written:");
+    Serial.println(tagWriteData);
+
+    OLED_Clear();
+    OLED_DisplayText("Approach tag\nPress ENTER");
+
+    while (true) {
+        char* input = KEYBOARD_READ(0);
+        globalServiceMonitor(input);
+        if (String(input) == "`") break;
+    }
+
+    rfid_writeTag(tagWriteData);
+    Serial.println("✅ Tag written successfully.");
+
+    OLED_Clear();
+    OLED_DisplayText("1-Service\n2-More");
+
+    // Final decision
+    while (true) {
+        char* input = KEYBOARD_READ(0);
+        globalServiceMonitor(input);
+        String choice = String(input);
+
+        if (choice == "1") {
+            Serial.println("[MODE2] Switching to SERVICE MODE...");
+            enterServiceMode();
+            return;
+        } else if (choice == "2") {
+            Serial.println("[MODE2] Restarting mode2...");
+            goto read_tag_again;  // Restart tag registration
+        }
+    }
+
+    Serial.println("[MODE2] Done.");
+}
 
 
 // MODE 3

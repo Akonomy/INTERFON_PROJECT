@@ -49,7 +49,7 @@ from .models import (
 
 # Config (tweak as needed)
 CHALLENGE_TTL = 60         # challenge expiry in seconds
-SESSION_TTL = 120          # session token TTL in seconds
+SESSION_TTL = 3000          # session token TTL in seconds
 MIN_RESPONSE_DELAY = 2     # server indicates device should wait ~2s
 GARBAGE_LEN = 64           # length for garbage hex on unknown keys
 PUBLIC_HMAC_TOLERANCE = getattr(settings, "ARDUINO_PUBLIC_HMAC_TOLERANCE", 60)

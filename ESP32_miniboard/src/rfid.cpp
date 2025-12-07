@@ -526,24 +526,22 @@ ParsedTagData parsePlaintext(const String& plaintext)
 {
     ParsedTagData out;
 
-    // Căutăm delimitatorii
-    int p_owner = plaintext.indexOf("owner=");
-    int p_created = plaintext.indexOf(";created=");
-    int p_info = plaintext.indexOf(";info=");
-
-    if (p_owner == -1 || p_created == -1 || p_info == -1) {
-        Serial.println("❌ parsePlaintext: invalid format");
+    int i_pos = plaintext.indexOf("<i>");
+    if (i_pos == -1) {
+        Serial.println("❌ parsePlaintext: missing <i>");
         return out;
     }
 
-    // Extragem owner
-    out.owner = plaintext.substring(p_owner + 6, p_created);
+    int o_pos = plaintext.indexOf("<o>");
 
-    // Extragem created
-    out.created = plaintext.substring(p_created + 9, p_info);
-
-    // Extragem encrypted_info
-    out.encrypted_info = plaintext.substring(p_info + 6);
+    if (o_pos == -1) {
+        // No owner part
+        out.encrypted_info = plaintext.substring(i_pos + 3);
+        out.owner = "";
+    } else {
+        out.encrypted_info = plaintext.substring(i_pos + 3, o_pos);
+        out.owner = plaintext.substring(o_pos + 3);
+    }
 
     out.valid = true;
     return out;
@@ -551,10 +549,8 @@ ParsedTagData parsePlaintext(const String& plaintext)
 
 
 
-
 String serverToTagPlaintext(const String& jsonResponse)
 {
-    // parse JSON
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, jsonResponse)) {
         Serial.println("❌ serverToTagPlaintext: JSON parse error");
@@ -562,26 +558,23 @@ String serverToTagPlaintext(const String& jsonResponse)
     }
 
     const char* status = doc["status"] | "error";
-
-    // dacă status nu e ok, nu generăm tag
     if (strcmp(status, "ok") != 0) {
         Serial.printf("❌ serverToTagPlaintext: status=%s (cannot build tag)\n", status);
         return "";
     }
 
-    // extragem câmpurile necesare
-    const char* owner = doc["owner"] | "";
-    const char* created = doc["created"] | "";
     const char* encrypted_info = doc["encrypted_info"] | "";
+    const char* owner = doc["owner"] | "";
 
-    // construim stringul plain text exact ca pe tag
-    String out = "owner=";
-    out += owner;
-    out += ";created=";
-    out += created;
-    out += ";info=";
+    String out = "<i>";
     out += encrypted_info;
+
+    if (strlen(owner) > 0) {
+        out += "<o>";
+        out += owner;
+    }
 
     return out;
 }
+
 
