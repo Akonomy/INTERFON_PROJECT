@@ -11,6 +11,13 @@
 
 #define MAX_INPUT_LEN 16
 
+
+#define MAX_NETWORKS 10
+
+
+uint8_t wifiSortedIndices[MAX_NETWORKS];
+uint8_t wifiNetworkCount = 0;
+int8_t wifiSelectedIndex = 0;
 // ════════════════════════════════════════════════════════════════
 // 📌 GLOBAL STATE & CONFIGURATION
 // ════════════════════════════════════════════════════════════════
@@ -382,7 +389,7 @@ start_over:
 
 
         if (strcmp(input, "@") != 0 && strcmp(input, "`") != 0)
-            goto start_over;
+            goto  start_over;
 
         delay(100);
     }
@@ -426,6 +433,10 @@ start_over:
         OLED_DisplayText("REJECTED");
         delay(1000);
     }
+
+
+
+        Serial.print("f _mode1_ ");
 }
 
 
@@ -554,19 +565,25 @@ read_tag_again:
         }
     }
 
-    Serial.println("[MODE2] Done.");
+
+    Serial.println("ex[MODE2]");
 }
 
 
-// MODE 3
-void mode3()
-{
-    LogStuff();
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
 
-    OLED_DisplayText("MODE 3 ACTIVE");
+void mode3() {
+      WiFi.mode(WIFI_STA);
+
+  scanAndStoreNetworks();
+
+  // Print all stored networks
+  for (uint8_t i = 0; i < storedCount; i++) {
+    String ssid = getSSIDFromStoredBSSID(storedNetworks[i].bssid);
+    Serial.printf("Network %d: SSID=%s, RSSI=%d\n", i, ssid.c_str(), storedNetworks[i].rssi);
+  }
+  enterServiceMode();
 }
+
 
 
 // MODE 4

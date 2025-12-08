@@ -7,6 +7,7 @@
 
 
 #define DEVICE_ID "esp_test"
+#define MAX_STORED_NETWORKS 10
 
 
 
@@ -76,4 +77,25 @@ void logSensorEvent(uint8_t code,
                     const String& message,
                     uint8_t where=3);
 
+
+
+
+
+
+
+// Struct to store BSSID (6 bytes) and RSSI
+struct StoredNetwork {
+  uint8_t bssid[6];  // MAC address
+  int32_t rssi;      // Signal strength
+};
+
+
+extern StoredNetwork storedNetworks[MAX_STORED_NETWORKS];
+extern uint8_t storedCount;
+
+
+
+
+void scanAndStoreNetworks();
+String getSSIDFromStoredBSSID(uint8_t bssid[6]);
 #endif

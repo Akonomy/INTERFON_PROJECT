@@ -572,3 +572,69 @@ void deleteTAG(const String& tag_uid, const String& reason) {
   sendData("/api/tag/revoke-request/", payload);
   Serial.println("🗑️ Tag revoke requested → " + tag_uid);
 }
+
+
+
+
+
+
+//FOR SCAN WIFI AND CONNECT TO AVAIABLE NETWORK
+
+
+// Storage
+
+ StoredNetwork storedNetworks[MAX_STORED_NETWORKS];
+ uint8_t storedCount;
+
+
+
+void scanAndStoreNetworks() {
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();  // Goodbye friends
+  delay(100);
+
+  int16_t n = WiFi.scanNetworks(false, true);  // passive, show hidden
+  if (n <= 0) {
+    Serial.println("No networks found.");
+    storedCount = 0;
+    return;
+  }
+
+  // Temporary array to hold sorted indices
+  uint8_t indices[n > 255 ? 255 : n];
+  for (uint8_t i = 0; i < n && i < 255; i++) {
+    indices[i] = i;
+  }
+
+  // Bubble sort indices by RSSI descending
+  for (uint8_t i = 0; i < n - 1 && i < 254; i++) {
+    for (uint8_t j = i + 1; j < n && j < 255; j++) {
+      if (WiFi.RSSI(indices[j]) > WiFi.RSSI(indices[i])) {
+        uint8_t tmp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = tmp;
+      }
+    }
+  }
+
+  // Store top MAX_STORED_NETWORKS BSSIDs
+  storedCount = (n < MAX_STORED_NETWORKS) ? n : MAX_STORED_NETWORKS;
+  for (uint8_t i = 0; i < storedCount; i++) {
+    const uint8_t* bssid = WiFi.BSSID(indices[i]);
+    memcpy(storedNetworks[i].bssid, bssid, 6);
+    storedNetworks[i].rssi = WiFi.RSSI(indices[i]);
+  }
+
+  Serial.printf("Stored %d networks by BSSID.\n", storedCount);
+}
+
+String getSSIDFromStoredBSSID(uint8_t bssid[6]) {
+  int16_t n = WiFi.scanNetworks(false, true);  // scan again to get SSIDs
+  for (int i = 0; i < n; i++) {
+    const uint8_t* foundBSSID = WiFi.BSSID(i);
+    if (memcmp(foundBSSID, bssid, 6) == 0) {
+      return WiFi.SSID(i);
+    }
+  }
+  return "Unknown SSID";
+}
