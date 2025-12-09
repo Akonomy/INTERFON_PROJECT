@@ -37,6 +37,7 @@ urlpatterns = [
 
     path('api/internal/commands/enqueue/', views.internal_enqueue_command, name='internal_enqueue_command'),
 
+    path('api/ping/', views.ping_view, name='ping'),
 
 
     path('syslog/', views.syslog_view, name='syslog_view'),

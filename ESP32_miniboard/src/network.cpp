@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include "mbedtls/md.h"
 #include <time.h>
+#include <oled.h>
 
 // -----------------------------------------------------------------------------
 //  CONFIG / GLOBALS
@@ -526,12 +527,7 @@ void syncTime() {
 // -----------------------------------------------------------------------------
 //  COMBINED HELPER
 // -----------------------------------------------------------------------------
-void connectAndCheckTag(const char* ssid, const char* password, const String& tagUID) {
-  connectWiFi(ssid, password);
-  if (authenticate()) {
-    ;
-  }
-}
+
 
 
 
@@ -591,7 +587,7 @@ void deleteTAG(const String& tag_uid, const String& reason) {
 void scanAndStoreNetworks() {
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();  // Goodbye friends
-  delay(100);
+  delay(10);
 
   int16_t n = WiFi.scanNetworks(false, true);  // passive, show hidden
   if (n <= 0) {
@@ -637,4 +633,77 @@ String getSSIDFromStoredBSSID(uint8_t bssid[6]) {
     }
   }
   return "Unknown SSID";
+}
+
+
+
+//MONITOR SERVER STATUS
+bool pingServer() {
+    HTTPClient http;
+    http.begin(BASE_URL + "/api/ping/");
+    int code = http.GET();
+    String response = http.getString();
+    http.end();
+
+    Serial.println("🔎 Ping response: " + response);
+
+    return (code == 200 && response.indexOf("hey") >= 0);
+}
+
+
+
+
+
+// Optional delay between checks (e.g. every 60 seconds)
+static unsigned long lastServerCheck = 0;
+static const unsigned long serverCheckInterval = 60000;
+
+static bool lastStatusKnown = false;
+static bool lastServerOnline = false;
+
+void monitorServerStatus(int mode) {
+    unsigned long now = millis();
+    if (now - lastServerCheck < serverCheckInterval) return;
+    lastServerCheck = now;
+
+    bool pingOk = pingServer();
+
+    if (!pingOk) {
+        if (!lastStatusKnown || lastServerOnline) {
+            lastServerOnline = false;
+            lastStatusKnown = true;
+
+            OLED_Clear();
+            if (mode == 1 || mode < 0) {
+                OLED_DisplayText("SERVER OFFLINE");  // Public mode → no "MODE X"
+            } else {
+                OLED_DisplayStrictText("MODE " + String(mode), "SERVER OFFLINE");
+            }
+        }
+        return;
+    }
+
+    // Server responds
+    if (!lastServerOnline) {
+        if (authenticate()) {
+            lastServerOnline = true;
+            if (mode == 1 || mode < 0) {
+                OLED_Clear();
+                OLED_DisplayText("SERVER ONLINE");
+            } else {
+                OLED_Clear();
+                OLED_DisplayStrictText("MODE " + String(mode), "SERVER ONLINE");
+            }
+        } else {
+            lastServerOnline = false;
+            OLED_Clear();
+            if (mode == 1 || mode < 0) {
+                OLED_DisplayText("AUTH FAIL");
+            } else {
+                OLED_DisplayStrictText("MODE " + String(mode), "AUTH FAIL");
+            }
+        }
+    }
+
+    lastStatusKnown = true;
 }

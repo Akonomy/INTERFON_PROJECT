@@ -49,7 +49,6 @@ void receiveQueue();
 uint8_t checkTag(const String& tagUID, const String& encryptedInfo) ;
 void registerTAG(const String& tag_uid, const String& notes = "");
 void deleteTAG(const String& tag_uid, const String& reason = "");
-void connectAndCheckTag(const char* ssid = "Minerii din bomboclat", const char* password = "castravete", const String& tagUID = "SOME_TAG_UID");
 
 String getTagInfo(const String& tagUID);
 
@@ -98,4 +97,10 @@ extern uint8_t storedCount;
 
 void scanAndStoreNetworks();
 String getSSIDFromStoredBSSID(uint8_t bssid[6]);
+
+
+void monitorServerStatus(int mode = -1);
+
+
+
 #endif

@@ -8,6 +8,7 @@
 
 static const uint8_t ROW_PINS[4] = { 201, 204, 203, 202 }; // R2, R4, R6, R7
 static const uint8_t COL_PINS[3] = { 101, 100, 102 }; // C1, C3, C5
+bool keyboardNeedsRefresh = false;
 
 static const char KEYPAD[4][3] = {
     { '1', '2', '3' },
@@ -121,18 +122,19 @@ void KEYBOARD_CLEAR_BUFFER() {
 }
 char KEYBOARD_READ_CHAR() {
     static const char* multiCharMap[10] = {
-        " 0",       // 0 => Space, 0
-        ".!?-1",      // 1 => . ! ?
-        "ABC2",      // 2
-        "DEF3",      // 3
-        "GHI4",      // 4
-        "JKL5",      // 5
-        "MNO6",      // 6
-        "PQRS7",     // 7
-        "TUV8",      // 8
-        "WXYZ9"      // 9
+        " 0>",       // 0 => space, 0, shift toggle
+        ".!?-1",
+        "abc2",
+        "def3",
+        "ghi4",
+        "jkl5",
+        "mno6",
+        "pqrs7",
+        "tuv8",
+        "wxyz9"
     };
 
+    static bool uppercase = false;
     static char lastMultiKey = '\0';
     static int charIndex = 0;
     static unsigned long lastPressTime = 0;
@@ -144,70 +146,82 @@ char KEYBOARD_READ_CHAR() {
         ev = KEYBOARD_READ_KEY();
 
         if (ev.type == KEY_CHAR) {
-            // Start tracking the press time
-            pressStart = millis();
+            char key = ev.value;
 
-            // Wait for key release or timeout (i.e., hold detection)
+            pressStart = millis();
             while (GPIO_DIGITAL_READ(ev.value) == HIGH) {
                 delay(5);
                 if (millis() - pressStart >= 600) {
-                    // Long press detected → return digit
-                    return ev.value;
+                    return key; // long press → number
                 }
             }
 
-            // If released before threshold, handle as multi-tap
             unsigned long now = millis();
-            uint8_t keyIdx = ev.value - '0';
+            uint8_t keyIdx = key - '0';
             if (keyIdx > 9) continue;
 
-            if (ev.value == lastMultiKey && (now - lastPressTime < 400)) {
-                // Cycle through letters
+            if (key == lastMultiKey && (now - lastPressTime < 400)) {
                 charIndex++;
                 if (charIndex >= strlen(multiCharMap[keyIdx])) {
                     charIndex = strlen(multiCharMap[keyIdx]) - 1;
                 }
             } else {
-                lastMultiKey = ev.value;
+                lastMultiKey = key;
                 charIndex = 0;
             }
 
             lastPressTime = now;
 
-            // Wait to finalize input (short press)
+            // Wait for next key or timeout
             unsigned long confirmStart = millis();
             while (millis() - confirmStart < 400) {
                 KeyEvent nextEv = KEYBOARD_READ_KEY();
                 if (nextEv.type == KEY_CHAR) {
-                    if (nextEv.value == ev.value) {
-                        // cycle further
-                        now = millis();
+                    if (nextEv.value == key) {
                         charIndex++;
                         if (charIndex >= strlen(multiCharMap[keyIdx])) {
                             charIndex = strlen(multiCharMap[keyIdx]) - 1;
                         }
-                        lastPressTime = now;
-                        confirmStart = millis(); // reset confirmation window
+                        lastPressTime = millis();
+                        confirmStart = millis(); // restart
                     } else {
-                        // Different key pressed: finalize current letter
                         lastMultiKey = nextEv.value;
-                        return multiCharMap[keyIdx][charIndex];
+                        break;
                     }
                 }
                 delay(10);
             }
 
-            // Timed out — return current letter
-            return multiCharMap[keyIdx][charIndex];
+            // FINAL SELECTION
+            char result = multiCharMap[keyIdx][charIndex];
+
+            if (result == '>') {
+                // toggle case mode
+                uppercase = !uppercase;
+                OLED_Clear();
+                OLED_DisplayText(uppercase ? "ABC MODE" : "abc mode", 2);
+                delay(600);
+                OLED_Clear();
+
+                // signal that we want to refresh buffer text after this
+                keyboardNeedsRefresh = true;
+
+                return '\0'; // don't insert anything
+            }
+
+
+            if (uppercase && isalpha(result)) {
+                result = toupper(result);
+            }
+
+            return result;
         }
+
         else if (ev.type == KEY_ENTER || ev.type == KEY_CLEAR) {
-            return ev.value;  // '#' or '*'
+            return ev.value;
         }
     }
 }
-
-
-
 
 
 
@@ -253,6 +267,16 @@ char* KEYBOARD_READ(uint8_t mode)
 
     while (true)
     {
+
+         if (keyboardNeedsRefresh) {
+                OLED_Clear();
+                if (!isPassword)
+                    OLED_DisplayText(buffer, textSize);
+                else
+                    OLED_DisplayText("``", 3);
+
+                keyboardNeedsRefresh = false; // reset flag
+            }
         char ch;
         KeyEvent ev;
 
@@ -274,6 +298,8 @@ char* KEYBOARD_READ(uint8_t mode)
                 delay(50);
                 continue;
             }
+
+
         }
         else
         {
@@ -299,6 +325,8 @@ char* KEYBOARD_READ(uint8_t mode)
         // key was pressed — reset timers
         lastKeyTime = millis();
         startTime = millis(); // restart idle timeout too
+
+
 
         // ENTER (#)
         if (ch == '#')
@@ -361,5 +389,33 @@ char* KEYBOARD_READ(uint8_t mode)
         }
 
         OLED_Update();
+    }
+}
+
+
+
+
+char KEYBOARD_READ_CONTROL() {
+    while (true) {
+        KeyEvent ev = KEYBOARD_READ_KEY();
+        if (ev.type == KEY_NONE) continue;
+
+        char key = ev.value;
+
+        switch (key) {
+            case '2': return 'U';  // Up
+            case '4': return 'L';  // Left
+            case '6': return 'R';  // Right
+            case '8': return 'D';  // Down
+            case '#': return 'E';  // Enter
+            case '*': return 'B';  // Back
+            case '1': return '1';
+            case '3': return '3';
+            case '7': return '7';
+            case '9': return '9';
+            default:
+                // Ignore other keys
+                return '\0';
+        }
     }
 }

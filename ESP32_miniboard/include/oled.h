@@ -47,4 +47,6 @@ void OLED_DisplayPassword(const String &input, bool reset = false);
 // Updates internal timers (call this in loop)
 void OLED_Update();
 
+
+void OLED_DisplayStrictText(const String &line1, const String &line2);
 #endif

@@ -991,3 +991,11 @@ def api_log_access(request):
     )
 
     return JsonResponse({"status": "ok", "access_log_id": log.id})
+
+
+
+@csrf_exempt
+
+def ping_view(request):
+    return HttpResponse("heyyy", status=200)
+

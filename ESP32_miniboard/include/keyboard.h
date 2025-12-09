@@ -46,4 +46,6 @@ void KEYBOARD_READ_STRING(char* buffer, int maxLen, bool stopOnEnter);
 
 char* KEYBOARD_READ(uint8_t mode);
 
+
+char KEYBOARD_READ_CONTROL();
 #endif // KEYBOARD_H

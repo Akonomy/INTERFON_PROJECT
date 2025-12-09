@@ -126,3 +126,40 @@ void OLED_Update() {
     display.display();
   }
 }
+
+
+void OLED_DisplayStrictText(const String &line1, const String &line2) {
+  display.clearDisplay();
+
+  // --- Line 1 ---
+  String l1 = line1;
+  uint8_t size1 = 1;
+  if (l1.length() <= 10) {
+    size1 = 2;
+  }
+  if (l1.length() > 21) {
+    l1 = l1.substring(0, 21);  // Cold-blooded slice
+  }
+
+  display.setTextSize(size1);
+  display.setCursor(0, 0);
+  display.print(l1);
+
+  // --- Line 2 ---
+  String l2 = line2;
+  uint8_t size2 = 1;
+  int yOffset = (size1 == 2) ? 16 : 10;
+
+  if (l2.length() <= 10) {
+    size2 = 2;
+  }
+  if (l2.length() > 21) {
+    l2 = l2.substring(0, 21);  // No survivors
+  }
+
+  display.setTextSize(size2);
+  display.setCursor(0, yOffset);
+  display.print(l2);
+
+  display.display();
+}

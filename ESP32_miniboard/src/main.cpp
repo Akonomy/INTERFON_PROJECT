@@ -230,6 +230,7 @@ void setMode(int mode)
 
 void runCurrentMode()
 {
+    monitorServerStatus(currentMode);
 
     switch (currentMode)
     {
@@ -570,19 +571,135 @@ read_tag_again:
 }
 
 
-
 void mode3() {
-      WiFi.mode(WIFI_STA);
-
+  WiFi.mode(WIFI_STA);
   scanAndStoreNetworks();
 
-  // Print all stored networks
-  for (uint8_t i = 0; i < storedCount; i++) {
-    String ssid = getSSIDFromStoredBSSID(storedNetworks[i].bssid);
-    Serial.printf("Network %d: SSID=%s, RSSI=%d\n", i, ssid.c_str(), storedNetworks[i].rssi);
+  if (storedCount == 0) {
+    OLED_DisplayText("No networks", 2);
+    delay(2000);
+    enterServiceMode();
+    return;
   }
-  enterServiceMode();
+
+  uint8_t selectedIndex = 0;
+
+  while (true) {
+    // Show current selection
+    String ssid = getSSIDFromStoredBSSID(storedNetworks[selectedIndex].bssid);
+    String rssi = String(storedNetworks[selectedIndex].rssi) + " dBm";
+
+    OLED_DisplayStrictText(ssid, rssi);
+
+    // Wait for control key
+    char key = KEYBOARD_READ_CONTROL();
+
+    switch (key) {
+      case 'U':
+        if (selectedIndex > 0) selectedIndex--;
+        OLED_Clear();
+        OLED_DisplayText("Loading...", 2);
+        break;
+
+      case 'D':
+        if (selectedIndex < storedCount - 1) selectedIndex++;
+        OLED_Clear();
+        OLED_DisplayText("Loading...", 2);
+        break;
+
+      case '3':
+        OLED_Clear();
+        OLED_DisplayText("Rescanning...", 1);
+        scanAndStoreNetworks();
+        selectedIndex = 0;
+        break;
+
+      case '1':
+        enterServiceMode();
+        return;
+
+      case 'E': {
+        String selectedSSID = getSSIDFromStoredBSSID(storedNetworks[selectedIndex].bssid);
+
+        OLED_DisplayStrictText(selectedSSID, "ENTER PASS");
+        delay(1000);
+        OLED_Clear();
+        OLED_DisplayText("Type pass:", 2);
+
+        char* pass = KEYBOARD_READ(1);
+
+        if (pass == nullptr || pass[0] == '@' || pass[0] == '\0') {
+          OLED_DisplayStrictText("Canceled", "");
+          delay(1500);
+          enterServiceMode();
+          return;
+        }
+
+        OLED_DisplayStrictText(selectedSSID, String(pass));
+        delay(2000);
+
+        // Try to connect to Wi-Fi
+        OLED_DisplayText("Connecting...", 2);
+        WiFi.begin(selectedSSID.c_str(), pass);
+
+        unsigned long start = millis();
+        bool connected = false;
+        while (millis() - start < 10000) {  // Wait up to 10 sec
+          if (WiFi.status() == WL_CONNECTED) {
+            connected = true;
+            break;
+          }
+          delay(300);
+        }
+
+        if (!connected) {
+          OLED_DisplayStrictText("Connect failed", "");
+          delay(3000);
+          enterServiceMode();
+          return;
+        }
+
+        String ip = WiFi.localIP().toString();
+        OLED_DisplayStrictText(ip, "Auth...");
+
+        // Try authentication
+        bool authed = authenticate();
+
+        if (authed) {
+          OLED_DisplayStrictText(ip, "SERVER ACTIVE");
+        } else {
+          OLED_DisplayStrictText(ip, "SERVER OFFLINE");
+
+          // Allow retry via '9'
+          while (true) {
+            char k = KEYBOARD_READ_CONTROL();
+            if (k == '9') {
+              OLED_DisplayStrictText("Retrying...", "");
+              bool retrySuccess = authenticate();
+              if (retrySuccess) {
+                OLED_DisplayStrictText(ip, "SERVER ACTIVE");
+                break;
+              } else {
+                OLED_DisplayStrictText(ip, "AUTH FAILED");
+              }
+            } else if (k == '1') {
+              enterServiceMode();
+              return;
+            }
+          }
+        }
+
+        delay(3000);
+        enterServiceMode();
+        return;
+      }
+
+      default:
+        break;
+    }
+  }
 }
+
 
 
 
