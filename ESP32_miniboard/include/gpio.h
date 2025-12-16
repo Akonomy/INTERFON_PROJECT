@@ -29,6 +29,7 @@
 #define COL_5      102
 #define TAMPER_L   103
 #define TAMPER_H   104
+#define BATTERY_P  105
 
 
 #define SDA_PIN 8
@@ -44,5 +45,6 @@ int  GPIO_READ(uint8_t pin);
 
 // Check if a pin is valid (returns true if usable)
 bool GPIO_IS_VALID(uint8_t pin);
-
+float GPIO_CHECK_STATUS_AND_BATTERY();
+uint8_t GPIO_CHECK_TAMPER_FAST();
 #endif

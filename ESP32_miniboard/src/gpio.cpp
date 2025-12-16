@@ -154,3 +154,59 @@ int GPIO_READ(uint8_t pin) {
     return 0;
   }
 }
+
+
+
+float GPIO_CHECK_STATUS_AND_BATTERY() {
+  // Step 1: Activate tamper check
+  GPIO_SET(TAMPER_C, true);
+
+  // Wait 2ms (unfortunately, precision rituals need time)
+  delay(2);
+
+  // Step 2: Read tamper pins
+  bool tamperL = GPIO_DIGITAL_READ(TAMPER_L);
+  bool tamperH = GPIO_DIGITAL_READ(TAMPER_H);
+
+  // Tamper logic: compromised if L is HIGH and H is LOW
+  bool tamperCompromised = (tamperL == HIGH && tamperH == LOW);
+
+  // Step 3: Read battery voltage
+  int adcVal = GPIO_READ(BATTERY_P);  // 0-4095 on ESP32
+  Serial.print(adcVal);
+ float vBat = ((float)adcVal / 4095.0f) * 3.3f * 2.4242f * 1.1395f;
+
+
+
+  // Round to 1 decimal place
+  vBat = roundf(vBat * 10.0f) / 10.0f;
+
+  // Step 4: Return final code
+  if (tamperCompromised) {
+    return 100.0f + vBat;
+  } else {
+    return 200.0f + vBat;
+  }
+}
+
+
+uint8_t GPIO_CHECK_TAMPER_FAST() {
+  // Enable tamper circuit
+  GPIO_SET(TAMPER_C, true);
+
+  // Check HIGH side FIRST (wire cut = LOW)
+  int tamperH = GPIO_DIGITAL_READ(TAMPER_H);
+  if (tamperH != HIGH) {
+    return 1; // compromised immediately
+  }
+
+  // Then check LOW side
+  int tamperL = GPIO_DIGITAL_READ(TAMPER_L);
+  if (tamperL != LOW) {
+    return 1; // compromised
+  }
+
+  return 0; // tamper OK
+}
+
+

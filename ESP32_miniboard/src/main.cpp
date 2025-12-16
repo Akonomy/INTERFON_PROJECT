@@ -65,6 +65,20 @@ void updateDisplay() {
 // ════════════════════════════════════════════════════════════════
 // 📝 LOGGING FUNCTION
 // ════════════════════════════════════════════════════════════════
+void tamperTask(void *param) {
+  while (true) {
+    uint8_t tamper = GPIO_CHECK_TAMPER_FAST();
+
+    // Do something smart (or dumb) with the result
+    Serial.print("[TAMPER TASK] Status: ");
+    Serial.println(tamper);
+
+    // Wait 5 seconds without blocking other tasks
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
+
+
 
 void LogStuff() {
     if (!canLog) return;
@@ -201,11 +215,26 @@ void setup() {
 
     syncTime();
 
+/*      // Create tamper task on core 0, priority 1
+  xTaskCreatePinnedToCore(
+    tamperTask,
+    "TamperCheckTask",
+    2048,     // Stack size in words, not bytes
+    NULL,
+    1,        // Priority (low, so it doesn't mess with Wi-Fi etc)
+    NULL,
+    0         // Core 0 (leave core 1 to Wi-Fi / heavy stuff)
+  );
+
+*/
+
     logSensorEvent(6, "system", "ESP32 boot completed", 2);
 
     initServiceSequence();
 
     OLED_DisplayText("READY");
+
+
 }
 
 
@@ -717,10 +746,37 @@ void mode4()
 // MODE 5
 void mode5()
 {
+    static unsigned long lastBatteryUpdate = 0;
+    const unsigned long BATTERY_INTERVAL = 300000; // 5 minute
+
+    unsigned long now = millis();
+
+    // Rulează NON-STOP (tastatură, servicii etc.)
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
-    OLED_DisplayText("MODE 5 ACTIVE");
+    // Update baterie DOAR la 5 minute
+    if (now - lastBatteryUpdate >= BATTERY_INTERVAL) {
+        lastBatteryUpdate = now;
+
+        float result = GPIO_CHECK_STATUS_AND_BATTERY();
+
+        // Tamper status: 100.x = compromised (1), 200.x = OK (0)
+        int tamper = (result < 150.0f) ? 1 : 0;
+
+        // Battery voltage
+        float battery = (tamper == 1) ? (result - 100.0f)
+                                      : (result - 200.0f);
+
+        // Debug
+        Serial.print("Tamper Status: ");
+        Serial.print(tamper);
+        Serial.print(" | Battery Voltage: ");
+        Serial.print(battery, 1);
+        Serial.println("V");
+
+        UPDATE_BATTERY_SENSOR(battery);
+    }
 }
 
 
@@ -731,6 +787,8 @@ void mode6()
     globalServiceMonitor(input);
 
     OLED_DisplayText("MODE 6 ACTIVE");
+    connectWiFi("Minerii din bomboclat","castravete");
+    enterServiceMode();
 }
 
 

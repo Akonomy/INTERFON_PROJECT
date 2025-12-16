@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Battery History - {{ sensor.name }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Battery History - {{ sensor.name }}</h1>
+
+    <canvas id="batteryChart" width="1000" height="400"></canvas>
+
+    <script>
+        const ctx = document.getElementById('batteryChart').getContext('2d');
+        const batteryChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ labels|safe }},
+                datasets: [{
+                    label: 'Battery Voltage (V)',
+                    data: {{ values|safe }},
+                    fill: false,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Timestamp'
+                        },
+                        ticks: {
+                            maxRotation: 90,
+                            minRotation: 45
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Voltage (V)'
+                        },
+                        suggestedMin: 0,
+                        suggestedMax: 8
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

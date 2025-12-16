@@ -13,6 +13,8 @@
     <link rel="stylesheet" type="text/css" href="{% static 'css/util.css' %}">
     <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
     <link rel="stylesheet" type="text/css" href="{% static 'css/dashboard.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
     /* NEW Background */
     body {
@@ -119,6 +121,11 @@
         box-shadow: 0 0 20px rgba(0, 255, 255, 0.05);
     }
 
+    .graph-placeholder canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
     .access-log-table {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid #00fff7;
@@ -158,6 +165,20 @@
         margin-bottom: 20px;
     }
 
+    .clickable-graph {
+    cursor: pointer;
+    position: relative;
+}
+
+.clickable-graph:hover {
+    box-shadow: 0 0 25px rgba(0, 255, 255, 0.15);
+    transform: scale(1.01);
+}
+
+
+
+
+
     table td, table th {
         font-size: 0.9rem;
     }
@@ -185,9 +206,10 @@
 
     <!-- Neon Cyberpunk Navbar -->
     <nav class="navbar-retro">
-        <a href="#">HOME</a>
-        <a href="#">SYSLOG</a>
-        <a href="#">TAGS REGISTER</a>
+         <a href="{% url 'main:dashboard'%}">HOME</a>
+         <a href="{% url 'arduino_comm:syslog_view'%}">SYSLOG</a>
+          <a href="{% url 'arduino_comm:tag_list'%}">TAG REGISTER</a>
+           <a href="{% url 'arduino_comm:sensor_list'%}">SENSORS</a>
         <a href="#">ADMIN CONTROL</a>
         <a href="#">DEVICE</a>
     </nav>
@@ -254,8 +276,22 @@
 
                 <!-- Graphs Side by Side -->
                 <div class="graph-container">
-                    <div class="graph-placeholder">[ Temperatură vs Timp ]</div>
-                    <div class="graph-placeholder">[ Stare Ușă vs Timp ]</div>
+                    <!-- Left graph (still placeholder or another chart later) -->
+                     <!-- Right graph: Battery chart -->
+
+
+                  <div class="graph-placeholder clickable-graph"
+                     data-url="{% url 'arduino_comm:battery_history' %}">
+                    <canvas id="batteryChart"></canvas>
+                </div>
+
+
+
+                    <div class="graph-placeholder">
+                        [ Temperatură vs Timp ]
+                    </div>
+
+
                 </div>
 
                 <!-- Access Log Table -->
@@ -298,5 +334,61 @@
     <script src="{% static 'vendor/bootstrap/js/popper.js' %}"></script>
     <script src="{% static 'vendor/bootstrap/js/bootstrap.min.js' %}"></script>
     <script src="{% static 'js/dashboard.js' %}"></script>
+
+
+<script>
+document.querySelector('.clickable-graph')
+    .addEventListener('click', function () {
+        window.location.href = this.dataset.url;
+    });
+</script>
+
+
+    <script>
+    const ctx = document.getElementById('batteryChart').getContext('2d');
+
+    const batteryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ labels|safe }},
+            datasets: [{
+                label: 'Tensiune Baterie (V)',
+                data: {{ values|safe }},
+                fill: false,
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,   // IMPORTANT for your container
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Timp'
+                    },
+                   ticks: {
+                    autoSkip: true,
+                    maxTicksLimit: 4,
+                    maxRotation: 0,
+                    minRotation: 0,
+                }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Tensiune (V)'
+                    },
+                    suggestedMin: 0,
+                    suggestedMax: 8
+                }
+            }
+        }
+    });
+</script>
+
+
+
 </body>
 </html>

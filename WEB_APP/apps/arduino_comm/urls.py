@@ -20,6 +20,9 @@ urlpatterns = [
     path("sensors/<int:sensor_id>/delete/", views.sensor_delete, name="sensor_delete"),
     path('sensor_add/', views.sensor_add, name='sensor_add'),
 
+
+   path("battery-history/", views.battery_history_view, name="battery_history"),
+
     path("access-logs/", views.access_log_list, name="access_log_list"),
     path('sendcommand/', views.web_send_command, name='web_send_command'),
 

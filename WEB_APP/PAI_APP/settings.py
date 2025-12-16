@@ -125,6 +125,10 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+
+
+
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -138,9 +142,14 @@ LOGIN_URL = '/login/'  # Redirect here if not logged in
 LOGIN_REDIRECT_URL = '/dashboard/'  # Where to redirect after successful login
 LOGOUT_REDIRECT_URL = '/login/'  # Redirect after logout
 
-# Custom user model
-AUTH_USER_MODEL = "main.User"
+
 
 
 # Enable Django-Heroku for deployment
 django_heroku.settings(locals())
+
+
+
+
+# Custom user model
+AUTH_USER_MODEL = "main.CustomUser"

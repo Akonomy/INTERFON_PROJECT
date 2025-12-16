@@ -399,6 +399,35 @@ void UPDATE_SENSOR(const String& id_sensor,
   Serial.println("📤 Sensor update sent → " + id_sensor + ": " + status);
 }
 
+
+void UPDATE_BATTERY_SENSOR(float voltage) {
+  String value_text;
+  String status;
+
+  if (voltage < 1.9) {
+    value_text = "TAMPERED";
+    status = "OFFLINE";
+  }
+  else if (voltage < 4.4) {
+    value_text = "POWER DOWN";
+    status = "OK";
+  }
+  else if (voltage < 6.0) {
+    value_text = "DANGER";
+    status = "DANGER";
+  }
+  else {
+    value_text = "POWER OK";
+    status = "OK";
+  }
+
+  // Trimite update folosind funcția existentă
+  UPDATE_SENSOR("BATERIE", voltage, value_text, status);
+
+  Serial.println("🔋 Battery update → Voltage: " + String(voltage, 2) + "V, Text: " + value_text + ", Status: " + status);
+}
+
+
 // -----------------------------------------------------------------------------
 //  ACCESS LOG
 // -----------------------------------------------------------------------------

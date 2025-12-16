@@ -6,7 +6,7 @@
 #include <ArduinoJson.h>
 
 
-#define DEVICE_ID "esp_test"
+#define DEVICE_ID "esp32-core-01"
 #define MAX_STORED_NETWORKS 10
 
 
@@ -59,6 +59,9 @@ void UPDATE_SENSOR(const String& id_sensor,
                    float value_int,
                    const String& value_text,
                    const String& status);
+
+
+void UPDATE_BATTERY_SENSOR(float voltage);
 
 // -----------------------------------------------------------------------------
 //  ACCESS LOGGING

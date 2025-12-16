@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block head %}
+<link rel="stylesheet" type="text/css" href="{% static 'accounts/style.css' %}">
+<style>
+  /* Stiluri pentru pagina administrare utilizatori */
+  body {
+    background: #f9f9f9;
+  }
+  .container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+  h1 {
+    color: #336699;
+    text-align: center;
+  }
+  /* Stiluri minimale pentru tabel */
+  .user-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: #fff;
+  }
+  .user-table th, .user-table td {
+    border: 1px solid #ccc;
+    padding: 12px;
+    text-align: left;
+  }
+  .user-table th {
+    background-color: #007acc;
+    color: #fff;
+  }
+  .user-table tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+  .action-btn {
+    padding: 6px 12px;
+    margin: 0 2px;
+    border: none;
+    background-color: #336699;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .action-btn.delete {
+    background-color: #e60000; /* roșu */
+  }
+  .search-form input[type="text"] {
+    width: 300px;
+    padding: 8px;
+    margin-right: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  .search-form button {
+    padding: 8px 16px;
+    border: none;
+    background-color: #007acc;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+</style>
+<script>
+  function confirmUpdateRole(form) {
+      var selectElem = form.querySelector('select[name="role"]');
+      if (selectElem && selectElem.value === "admin") {
+          return confirm("Esti sigur ca doresti sa setezi acest utilizator ca admin?");
+      }
+      return true;
+  }
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container dark-theme">
+  <h1>Administrare Utilizatori</h1>
+
+  <!-- Formular de căutare -->
+  <form method="get" action="{% url 'main:manage_users' %}" class="search-form">
+    <input type="text" name="q" placeholder="Caută utilizator (nume sau email)..." value="{{ query }}">
+    <button type="submit">Caută</button>
+  </form>
+
+  <!-- Tabelul cu utilizatori -->
+  <table class="user-table">
+    <thead>
+      <tr>
+         <th>ID</th>
+         <th>Username</th>
+         <th>Email</th>
+         <th>Rol curent</th>
+         <th>Modifică rol</th>
+         <th>Acțiuni</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+         <td>{{ user.id }}</td>
+         <td>{{ user.username }}</td>
+         <td>{{ user.email }}</td>
+         <td>{{ user.role }}</td>
+         <td>
+           <!-- Formular inline pentru actualizarea rolului -->
+           <form method="post" action="{% url 'main:manage_users' %}" style="display:inline;" onsubmit="return confirmUpdateRole(this);">
+             {% csrf_token %}
+             <input type="hidden" name="user_id" value="{{ user.id }}">
+             <input type="hidden" name="action" value="update_role">
+             <select name="role">
+               <option value="">Selectează rol</option>
+               {% for key, value in ROLE_CHOICES %}
+                  <option value="{{ key }}" {% if user.role == key %}selected{% endif %}>{{ value }}</option>
+               {% endfor %}
+             </select>
+             <button type="submit" class="action-btn">Salvează</button>
+           </form>
+         </td>
+         <td>
+           <!-- Formular pentru ștergere -->
+           <form method="post" action="{% url 'main:manage_users' %}" style="display:inline;">
+             {% csrf_token %}
+             <input type="hidden" name="user_id" value="{{ user.id }}">
+             <input type="hidden" name="action" value="delete_user">
+             <button type="submit" class="action-btn delete" onclick="return confirm('Sigur dorești să ștergi acest utilizator?');">Șterge</button>
+           </form>
+         </td>
+      </tr>
+      {% empty %}
+      <tr>
+         <td colspan="6">Nu s-au găsit utilizatori.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -6,16 +6,17 @@ from bson.objectid import ObjectId
 from django.utils import timezone
 from datetime import datetime
 
-
-
-
-
-
-# Create your models here.
-# models.py (only the DEVICE class shown; keep your other models unchanged)
 import secrets
-from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
+
+
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+
+
 
 class DEVICE(models.Model):
     name = models.CharField(max_length=100, unique=True, help_text="A unique name for the device, e.g., 'Main_Entrance_ESP32'")
@@ -459,3 +460,46 @@ class SyslogEntry(models.Model):
 
 
 
+
+MAX_HISTORY = 200  # Limita istoric
+
+class SensorHistory(models.Model):
+    sensor = models.ForeignKey(
+        "SENSOR",
+        on_delete=models.CASCADE,
+        related_name="history"
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+    value_int = models.FloatField()
+    value_text = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=50, default="OK")
+
+    class Meta:
+        ordering = ["-timestamp"]
+        verbose_name = "Sensor History"
+        verbose_name_plural = "Sensor Histories"
+
+    def __str__(self):
+        return f"{self.sensor.name} @ {self.timestamp:%Y-%m-%d %H:%M:%S} → {self.value_int}"
+
+
+# Signal pentru a crea intrări de istoric automat la update
+@receiver(post_save, sender=SENSOR)
+def create_sensor_history(sender, instance, created, **kwargs):
+    # Dacă senzorul este creat, adaugă prima valoare
+    if created or instance.pk:
+        # Creează o intrare de istoric
+        SensorHistory.objects.create(
+            sensor=instance,
+            value_int=instance.value_int,
+            value_text=instance.value_text,
+            status=instance.status
+        )
+
+        # Limitează la MAX_HISTORY valori
+        history_qs = SensorHistory.objects.filter(sensor=instance).order_by('-timestamp')
+        excess_count = history_qs.count() - MAX_HISTORY
+        if excess_count > 0:
+            # Șterge cele mai vechi intrări
+            oldest_entries = history_qs.reverse()[:excess_count]
+            SensorHistory.objects.filter(id__in=[e.id for e in oldest_entries]).delete()

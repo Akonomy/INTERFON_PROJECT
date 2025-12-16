@@ -879,7 +879,7 @@ def sensor_edit(request, sensor_id):
         sensor.value_int = request.POST.get("value_int", sensor.value_int)
         sensor.value_text = request.POST.get("value_text") or None
         sensor.save()
-        return redirect("sensor_list")
+        return redirect("arduino_comm/sensor_list")
 
 
     return render(request, "arduino_comm/sensor_edit.html", {"sensor": sensor})
@@ -911,12 +911,34 @@ def sensor_add(request):
         form = SensorForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('sensor_list')
+            return redirect('arduino_comm/sensor_list')
     else:
         form = SensorForm()
 
     return render(request, 'arduino_comm/sensor_add.html', {'form': form})
 
+
+
+
+from .models import SENSOR, SensorHistory
+
+def battery_history_view(request):
+    # Obținem senzorul BATERIE
+    sensor = get_object_or_404(SENSOR, id_sensor="BATERIE")
+
+    # Luăm istoricul ultimelor MAX_HISTORY valori
+    history = sensor.history.order_by('timestamp')  # crescător pentru grafic
+
+    # Pregătim datele pentru Chart.js
+    labels = [h.timestamp.strftime("%Y-%m-%d %H:%M:%S") for h in history]
+    values = [h.value_int for h in history]
+
+    context = {
+        "sensor": sensor,
+        "labels": labels,
+        "values": values,
+    }
+    return render(request, "arduino_comm/battery_history.html", context)
 
 
 # ──────────────── ACCESS LOG VIEWS ────────────────

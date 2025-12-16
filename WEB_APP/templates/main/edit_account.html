@@ -1,0 +1,41 @@
+<!-- templates/accounts/edit_account.html -->
+
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Editează Cont{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'accounts/style.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="card mx-auto" style="max-width: 500px;">
+    <div class="card-body">
+        <h2 class="card-title text-center">Editează Cont</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="username" class="form-label">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" value="{{ user.username }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email:</label>
+                <input type="email" id="email" name="email" class="form-control" value="{{ user.email }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="first_name" class="form-label">Nume:</label>
+                <input type="text" id="first_name" name="first_name" class="form-control" value="{{ user.first_name }}">
+            </div>
+            <div class="mb-3">
+                <label for="last_name" class="form-label">Prenume:</label>
+                <input type="text" id="last_name" name="last_name" class="form-control" value="{{ user.last_name }}">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Actualizează</button>
+        </form>
+        <div class="text-center mt-3">
+            <a href="{% url 'main:profile' %}">Înapoi la profil</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
