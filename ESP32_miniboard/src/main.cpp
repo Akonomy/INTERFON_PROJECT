@@ -86,7 +86,7 @@ void LogStuff() {
     time_t now = time(nullptr);
     if (now == 0) return;
 
-    if ((now - lastLogEpoch) < 60) return;
+    if ((now - lastLogEpoch) < 420) return;
     lastLogEpoch = now;
 
     int rssi = WiFi.RSSI();  // Wi-Fi signal strength (dBm)
@@ -746,29 +746,37 @@ void mode4()
 // MODE 5
 void mode5()
 {
+
+      LogStuff();
+    // -----------------------------
+    // TIMER pentru baterie (5 min)
+    // -----------------------------
     static unsigned long lastBatteryUpdate = 0;
-    const unsigned long BATTERY_INTERVAL = 300000; // 5 minute
+    const unsigned long BATTERY_INTERVAL = 300000; // 5 min
 
-    unsigned long now = millis();
+    // -----------------------------
+    // TIMER pentru ceas OLED
+    // -----------------------------
+    static int lastMinute = -1;
 
-    // Rulează NON-STOP (tastatură, servicii etc.)
+    unsigned long nowMillis = millis();
+
+    // -----------------------------
+    // RULEAZĂ CONTINUU
+    // -----------------------------
     char* input = KEYBOARD_READ(0);
     globalServiceMonitor(input);
 
-    // Update baterie DOAR la 5 minute
-    if (now - lastBatteryUpdate >= BATTERY_INTERVAL) {
-        lastBatteryUpdate = now;
+    // -----------------------------
+    // UPDATE BATERIE la 5 minute
+    // -----------------------------
+    if (nowMillis - lastBatteryUpdate >= BATTERY_INTERVAL) {
+        lastBatteryUpdate = nowMillis;
 
         float result = GPIO_CHECK_STATUS_AND_BATTERY();
-
-        // Tamper status: 100.x = compromised (1), 200.x = OK (0)
         int tamper = (result < 150.0f) ? 1 : 0;
+        float battery = (tamper == 1) ? (result - 100.0f) : (result - 200.0f);
 
-        // Battery voltage
-        float battery = (tamper == 1) ? (result - 100.0f)
-                                      : (result - 200.0f);
-
-        // Debug
         Serial.print("Tamper Status: ");
         Serial.print(tamper);
         Serial.print(" | Battery Voltage: ");
@@ -776,6 +784,29 @@ void mode5()
         Serial.println("V");
 
         UPDATE_BATTERY_SENSOR(battery);
+    }
+
+    // -----------------------------
+    // AFIȘARE ORĂ PE OLED
+    // -----------------------------
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)) {
+
+        // Dacă s-a schimbat minutul
+        if (timeinfo.tm_min != lastMinute) {
+            lastMinute = timeinfo.tm_min;
+
+            char timeStr[6]; // HH:MM + NULL
+            snprintf(timeStr, sizeof(timeStr),
+                     "%02d:%02d",
+                     timeinfo.tm_hour,
+                     timeinfo.tm_min);
+
+            OLED_Clear();
+            OLED_DisplayText(timeStr);
+
+            Serial.println("🕒 OLED Time Updated: " + String(timeStr));
+        }
     }
 }
 

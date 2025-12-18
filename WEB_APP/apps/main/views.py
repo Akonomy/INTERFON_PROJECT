@@ -27,24 +27,38 @@ def custom_500_view(request):
     return render(request, '500.html', status=500)
 
 
+import random
+
 def dashboard_view(request):
+    try:
+        sensor = SENSOR.objects.get(id_sensor="BATERIE")
 
+        history = sensor.history.order_by('timestamp')
 
-    sensor = get_object_or_404(SENSOR, id_sensor="BATERIE")
+        labels = [h.timestamp.strftime("%Y-%m-%d %H:%M") for h in history]
+        values = [h.value_int for h in history]
 
-    # Luăm istoricul ultimelor MAX_HISTORY valori
-    history = sensor.history.order_by('timestamp')  # crescător pentru grafic
+    except SENSOR.DoesNotExist:
+        # MOCK DATA BECAUSE PRODUCTION IS A DESERT
+        now = timezone.now()
 
-    # Pregătim datele pentru Chart.js
-    labels = [h.timestamp.strftime("%Y-%m-%d %H:%M") for h in history]
-    values = [h.value_int for h in history]
+        labels = [
+            (now - timedelta(minutes=5 * i)).strftime("%Y-%m-%d %H:%M")
+            for i in range(10)
+        ][::-1]
+
+        values = [random.randint(20, 100) for _ in range(10)]
+
+        sensor = {
+            "id_sensor": "BATERIE (mock)",
+            "status": "mocked because DB is empty",
+        }
 
     context = {
         "sensor": sensor,
         "labels": labels,
         "values": values,
     }
-
 
 
     return render(request, 'main/dashboard.html',context)
