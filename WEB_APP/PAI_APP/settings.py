@@ -40,9 +40,9 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1', cast=Csv())
 DATABASES = {
     'default': {
         'ENGINE': 'djongo',
-        'NAME': os.getenv('MONGO_NAME'),
+        'NAME': config('MONGO_NAME'),
         'CLIENT': {
-            'host': os.getenv('MONGO_HOST'),
+            'host': config('MONGO_HOST'),
         }
     }
 }
@@ -146,9 +146,13 @@ LOGOUT_REDIRECT_URL = '/login/'  # Redirect after logout
 
 
 # Enable Django-Heroku for deployment
-django_heroku.settings(locals())
+#django_heroku.settings(locals())
 
-
+CSRF_TRUSTED_ORIGINS = [
+    "https://www.depozitautomat.shop",
+    "https://depozitautomat.shop",
+    "https://*.onrender.com"
+]
 
 
 # Custom user model

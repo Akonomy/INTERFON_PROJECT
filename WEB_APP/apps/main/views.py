@@ -6,6 +6,8 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 
 
+from django.utils import timezone
+from datetime import timedelta
 
 from apps.arduino_comm.models import SENSOR, SensorHistory
 
