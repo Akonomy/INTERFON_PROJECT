@@ -795,28 +795,64 @@ def syslog_view(request):
     return render(request, 'arduino_comm/syslog.html', {'page_obj': page_obj})
 
 
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+from datetime import datetime
+import traceback
+
 @csrf_exempt
 def syslog_api_receiver(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
+    # Hardcoded mode: 0=minimal, 1=detailed
+    MODE = 0  # <-- change to 0 for minimal
 
-            log = SyslogEntry.objects.create(
-                severity=data.get("severity", 6),
-                facility=data.get("facility", "user"),
-                host=data.get("host", "unknown"),
-                tag=data.get("tag", "esp32"),
-                message=data.get("message", "No message"),
-                ip=request.META.get("REMOTE_ADDR"),
-                priority=data.get("priority", 14),
-                device_time=data.get("device_time"),  # ⬅ added here
-            )
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST allowed."}, status=405)
 
-            return JsonResponse({"status": "ok", "id": log.id})
-        except Exception as e:
-            return JsonResponse({"status": "error", "detail": str(e)}, status=400)
+    try:
+        raw_body = request.body
+        data = json.loads(raw_body)
 
-    return JsonResponse({"error": "Only POST allowed."}, status=405)
+        # Convert device_time safely
+        device_time_obj = None
+        device_time_str = data.get("device_time")
+        if device_time_str:
+            try:
+                device_time_obj = datetime.fromisoformat(device_time_str.replace("Z", "+00:00"))
+            except ValueError:
+                device_time_obj = datetime.strptime(device_time_str, "%Y-%m-%d %H:%M:%S")
+
+        log = SyslogEntry.objects.create(
+            severity=data.get("severity", 6),
+            facility=data.get("facility", "user"),
+            host=data.get("host", "unknown"),
+            tag=data.get("tag", "esp32"),
+            message=data.get("message", "No message"),
+            ip=request.META.get("REMOTE_ADDR"),
+            priority=data.get("priority", 14),
+            device_time=device_time_obj,
+        )
+
+        return JsonResponse({"status": "ok", "id": log.id})
+
+    except Exception as e:
+        if MODE == 0:
+            # Minimal info
+            response = {
+                "status": "error",
+                "detail": str(e)
+            }
+        else:
+            # Detailed info
+            traceback_str = traceback.format_exc()
+            response = {
+                "status": "error",
+                "detail": str(e),
+                "trace": traceback_str,
+                "raw_body": raw_body.decode("utf-8") if isinstance(raw_body, bytes) else raw_body,
+                "parsed_data": data if 'data' in locals() else None
+            }
+        return JsonResponse(response, status=400)
 
 
 # views.py

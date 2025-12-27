@@ -9,6 +9,13 @@
 #include "rfid.h"
 #include "main.h"
 
+
+extern "C" {
+  #include "log.h"
+}
+
+
+
 #define MAX_INPUT_LEN 16
 
 
@@ -18,21 +25,18 @@
 uint8_t wifiSortedIndices[MAX_NETWORKS];
 uint8_t wifiNetworkCount = 0;
 int8_t wifiSelectedIndex = 0;
+
+
 // ════════════════════════════════════════════════════════════════
 // 📌 GLOBAL STATE & CONFIGURATION
 // ════════════════════════════════════════════════════════════════
 
-bool canLog = true;
-unsigned long lastLogTime = 0;
-const unsigned long logInterval = 3000;  // legacy (unused)
 
 int currentMode = DEFAULT_START_MODE;
 
 char currentInput[MAX_INPUT_LEN + 1]; // +1 for null terminator
 int inputLength = 0;
 
-time_t lastLogEpoch = 0;
-const unsigned long logIntervalSecs = 30;  // new log interval in seconds
 
 // ───── Service Mode State ─────
 String serviceSteps[3] = { "123", "321", "111" };
@@ -45,78 +49,13 @@ unsigned long serviceStartTime = 0;
 // 🔧 UTILITY FUNCTIONS
 // ════════════════════════════════════════════════════════════════
 
-void blockLogs() {
-    canLog = false;
-    Serial.println("[LOG] Logging temporarily blocked");
-}
 
-void allowLogs() {
-    canLog = true;
-    Serial.println("[LOG] Logging allowed");
-}
-
-void updateDisplay() {
-    currentInput[inputLength] = '\0'; // make sure it’s null-terminated
-    OLED_DisplayText(currentInput);
-    Serial.print("Input: ");
-    Serial.println(currentInput);
-}
 
 // ════════════════════════════════════════════════════════════════
 // 📝 LOGGING FUNCTION
 // ════════════════════════════════════════════════════════════════
-void tamperTask(void *param) {
-  while (true) {
-    uint8_t tamper = GPIO_CHECK_TAMPER_FAST();
-
-    // Do something smart (or dumb) with the result
-    Serial.print("[TAMPER TASK] Status: ");
-    Serial.println(tamper);
-
-    // Wait 5 seconds without blocking other tasks
-    vTaskDelay(pdMS_TO_TICKS(5000));
-  }
-}
 
 
-
-void LogStuff() {
-    if (!canLog) return;
-
-    time_t now = time(nullptr);
-    if (now == 0) return;
-
-    if ((now - lastLogEpoch) < 420) return;
-    lastLogEpoch = now;
-
-    int rssi = WiFi.RSSI();  // Wi-Fi signal strength (dBm)
-    unsigned long uptime = millis() / 1000;
-
-    // LOW SIGNAL → minimal logging + higher priority
-    if (rssi < -75) {
-        char msg[64];
-        snprintf(msg, sizeof(msg),
-            "[WIFI-LOW] RSSI=%d dBm | Uptime=%lus", rssi, uptime);
-
-        int severity = (rssi < -85) ? 2 : 4;  // 2 = critical, 4 = warning
-        logSensorEvent(severity, "wifi", msg, 2);
-        return;
-    }
-
-    // GOOD SIGNAL → log full system info
-    uint32_t freeHeap = ESP.getFreeHeap();
-    uint32_t minFreeHeap = ESP.getMinFreeHeap();
-    uint32_t heapSize = ESP.getHeapSize();
-    uint32_t freePsram = ESP.getFreePsram();
-    const char* resetReason = esp_reset_reason() == ESP_RST_POWERON ? "PowerOn" : "Other";
-
-    char msg[160];
-    snprintf(msg, sizeof(msg),
-        "[SYS] RSSI=%d dBm | Heap=%lu/%lu | Min=%lu | PSRAM=%lu | Uptime=%lus | Reset=%s",
-        rssi, freeHeap, heapSize, minFreeHeap, freePsram, uptime, resetReason);
-
-    logSensorEvent(6, "system", msg, 2);  // 6 = info
-}
 
 
 // ════════════════════════════════════════════════════════════════
@@ -133,63 +72,137 @@ void resetServiceSequence() {
     serviceActive = false;
 }
 
-void globalServiceMonitor(char* input) {
 
-    if (strchr(input, '@') != NULL) {
-        Serial.println("[SERVICE] Invalid input — '@' is not allowed. Skipping service monitor.");
-        resetServiceSequence();
-        return;
-    }
 
-    unsigned long now = millis();
+void SERVICE_MENU()
+{
+    OLED_Clear();
+    OLED_DisplayText("SERVICE MENU", 2);
 
-    if (serviceActive && (now - serviceStartTime > 15000)) {
-        resetServiceSequence();
-        return;
-    }
+    delay(500);
 
-    if (strlen(input) == 0)
-        return;
+    unsigned long start = millis();
+    const unsigned long TIMEOUT = 10000;
 
-    String val = String(input);
+    while (millis() - start < TIMEOUT)
+    {
+        if (!KEYBOARD_ACTIVE()) {
+            delay(20);
+            continue;
+        }
 
-    Serial.println(serviceStepIndex);
+        char* input = KEYBOARD_READ(0);
 
-    if (val == "`" && serviceStepIndex >= 2) {
-        Serial.print("[SERVICE]>>>");
-        serviceEnterCount++;
-         Serial.print(serviceEnterCount);
-         Serial.println("[SERVICE]>>>");
-        if (serviceEnterCount >= 2)
-
-            enterServiceMode();
-            Serial.print("[SERVICE]>>SUCCES");
-        return;
-    }
-
-    if (serviceStepIndex < 3) {
-        Serial.print(">>>[SERVICE]");
-           Serial.print(serviceSteps[serviceStepIndex]);
-              Serial.println(">>>[SERVICE]");
-        if (val == serviceSteps[serviceStepIndex]) {
-            if (!serviceActive) {
-                serviceStartTime = now;
-            }
-            serviceActive = true;
-            serviceStepIndex++;
+        if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0)
             return;
-        } else {
-            Serial.print("[SERVICE] received : ");
-            Serial.println(val);
-            Serial.print("[SERVICE] WRONG code at step ");
 
-            Serial.println(serviceStepIndex + 1);
+        if (strlen(input) == 0)
+            return;
 
-            resetServiceSequence();
+        LOG_MIN("SERVICE INPUT RECEIVED:");
+        LOG(input);
+
+        // -------------------------------
+        // must start with '5'
+        // -------------------------------
+        if (input[0] != '5')
+        {
+            OLED_Clear();
+            OLED_DisplayText("MENU INVALID", 2);
+            OLED_Update();
+            delay(800);
             return;
         }
+
+        // convert to int
+        int menuCode = atoi(input);
+
+        // reset timeout once valid family detected
+        start = millis();
+
+        // -------------------------------
+        // SWITCH SERVICE MODES
+        // -------------------------------
+        switch (menuCode)
+        {
+            case 55555:      // 🔐 password-protected example
+            {
+                LOG_MIN("55555 selected -> password request");
+
+                OLED_Clear();
+                OLED_DisplayText("PIN:", 2);
+                OLED_Update();
+
+                while (millis() - start < TIMEOUT)
+                {
+                    char* pin = KEYBOARD_READ(0);
+
+                    if (strcmp(pin, "@TIME") == 0 || strcmp(pin, "@NONE") == 0)
+                        return;
+
+                    if (strcmp(pin, "12345") == 0)
+                    {
+                        OLED_Clear();
+                        OLED_DisplayText("SUCCESS!", 2);
+                        enterServiceMode();
+
+                        LOG_MIN("PASSWORD OK");
+                        delay(800);
+
+                        return;
+                    }
+                    else
+                    {
+                        OLED_Clear();
+                        OLED_DisplayText("WRONG PIN", 2);
+                        OLED_Update();
+                        LOG_MIN("PASSWORD FAIL");
+                        delay(800);
+                        return;
+                    }
+                }
+
+                LOG_MIN("TIMEOUT WAITING PASSWORD");
+                return;
+            }
+
+            // ---------- add your future menus here ----------
+            case 50001:
+                LOG_MIN("option 50001 selected");
+                OLED_Clear();
+                OLED_DisplayText("OP 50001", 2);
+                OLED_Update();
+                delay(800);
+                return;
+
+            case 50002:
+                LOG_MIN("option 50002 selected");
+                OLED_Clear();
+                OLED_DisplayText("OP 50002", 2);
+                OLED_Update();
+                delay(800);
+                return;
+
+            // -----------------------------------------------
+            // DEFAULT — unknown 5xxxx menu
+            // -----------------------------------------------
+            default:
+                OLED_Clear();
+                OLED_DisplayText("MENU INVALID", 2);
+                OLED_Update();
+                LOG_MIN("INVALID MENU");
+                delay(800);
+                return;
+        }
     }
+
+    LOG_MIN("SERVICE MENU TIMEOUT");
 }
+
+
+
+
+
 
 void enterServiceMode() {
     currentMode = MODE_SERVICE;
@@ -202,37 +215,47 @@ void enterServiceMode() {
 // 🚀 SETUP FUNCTION
 // ════════════════════════════════════════════════════════════════
 
+
+void serial_logger(const char *msg)
+{
+    Serial.println(msg);
+}
+
+
 void setup() {
     Serial.begin(115200);
-    delay(500);
+    delay(50);
 
     //connectWiFi("C004","53638335");
     connectWiFi("Minerii din bomboclat","castravete");
     GPIO_INIT();
     OLED_Init();
+     OLED_QueueInit();
+
+     OLED_DisplayText("OLED OK");
     KEYBOARD_INIT();
+    OLED_DisplayText("KEY OK");
     rfid_init();
+    OLED_DisplayText("RFID OK");
+
 
     syncTime();
 
-/*      // Create tamper task on core 0, priority 1
-  xTaskCreatePinnedToCore(
-    tamperTask,
-    "TamperCheckTask",
-    2048,     // Stack size in words, not bytes
-    NULL,
-    1,        // Priority (low, so it doesn't mess with Wi-Fi etc)
-    NULL,
-    0         // Core 0 (leave core 1 to Wi-Fi / heavy stuff)
-  );
+    // register backend
+    log_set_output(serial_logger);
 
-*/
+    // set global level here (affects entire program)
+    log_set_level(LOG_FULL);   // or LOG_FULL / LOG_OFF
+
 
     logSensorEvent(6, "system", "ESP32 boot completed", 2);
 
     initServiceSequence();
 
-    OLED_DisplayText("READY");
+    //OLED_DisplayText("READY");
+  OLED_RequestDisplayText("Hello", 1, 50, 3);
+
+
 
 
 }
@@ -255,11 +278,12 @@ void setMode(int mode)
 
     currentMode = mode;
     OLED_Clear();
+    OLED_DisplayText(String(mode));
 }
 
 void runCurrentMode()
 {
-    monitorServerStatus(currentMode);
+    //monitorServerStatus(currentMode);
 
     switch (currentMode)
     {
@@ -291,41 +315,88 @@ void runCurrentMode()
 // MODE IMPLEMENTATIONS —
 // =====================================================================
 
+
+    unsigned long lastCallTime = 0; // Timpul ultimei apelări
+const unsigned long interval = 500; // 500ms
+
 // MODE 0 — SERVICE MODE
+
+
+
 void mode_service()
 {
-    LogStuff();
-    OLED_DisplayText("SERVICE");
-    char* input = KEYBOARD_READ(0);
 
-    // ───── Skip special control returns ─────
-    if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0) {
 
-        return;
+
+
+unsigned long currentMillis = millis();
+
+  // Verificăm dacă au trecut mai mult de 500ms
+  if (currentMillis - lastCallTime >= interval) {
+    LogStuff();                // apelăm funcția
+    lastCallTime = currentMillis; // actualizăm timpul ultimei apelări
+  }
+
+
+
+
+    // always run these (fast + lightweight)
+
+    // LogStuff();   // if you use i
+    // --------------------------------------
+    // KEYBOARD PART — only sometimes runs
+    // --------------------------------------
+    if (KEYBOARD_ACTIVE()) {
+
+        // do the full blocking read only when actually active
+        char* input = KEYBOARD_READ(0);
+
+
+
+        // skip processing on special return tokens
+        if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0) {
+            // don't return from the function — just skip rest
+        }
+
+        // ---- NEW: service secret code ----
+        else if (strcmp(input, "@service") == 0) {
+
+            OLED_Clear();
+            OLED_DisplayText("insert    OP[201]", 2);
+            OLED_Update();
+            delay(800);
+            SERVICE_MENU();
+
+            // stay in service mode, no return
+        }
+        else if (strlen(input) > 0)
+        {
+            int target = atoi(input);
+
+            if (target > 0 && target < MAX_MODES)
+            {
+                OLED_Clear();
+                OLED_DisplayText("Loading MODE " + String(target));
+                delay(400);
+                setMode(target);
+                // (here a return is OK because you're changing mode)
+            }
+            else
+            {
+                OLED_DisplayText("Invalid selection");
+            }
+        }
     }
 
-    if (strlen(input) == 0)
-        return;
-
-
-    globalServiceMonitor(input);
-
-
-    int target = atoi(input);
-
-    if (target > 0 && target < MAX_MODES)
-    {
-        OLED_Clear();
-        OLED_DisplayText("Loading MODE " + String(target));
-        delay(400);
-
-        setMode(target);
-    }
-    else
-    {
-        OLED_DisplayText("Invalid selection");
-    }
+    // --------------------------------------
+    // everything else in service mode keeps running
+    // --------------------------------------
+    // … background things here (battery, comms, etc.)
 }
+
+
+
+
 
 void mode1()
 {
@@ -343,53 +414,16 @@ start_over:
 
     while (millis() - idleStart < 15000)
     {
-        char* input = KEYBOARD_READ(0);
+
+    if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
 
 
         if (strcmp(input, "@") == 0 || strlen(input) == 0) goto start_over;
 
-        // ─── Entered "1" → possible service entry ───
-        if (strcmp(input, "1") == 0)
-        {
-            OLED_Clear();
-            OLED_DisplayText("SCAN TAG...");
-            delay(5000); // fake wait
-            OLED_Clear();
-            OLED_DisplayText("WAITING...");
 
-            // Now wait for Enter to begin service sequence
-            while (true) {
-                char* in = KEYBOARD_READ(0);
-
-                if (strcmp(in, "@") == 0) continue;
-                if (strcmp(in, "`") == 0) break;
-
-                // Any other input = restart
-                goto start_over;
-            }
-
-            // Start collecting service codes
-            for (int i = 0; i < 6; i++) {
-                OLED_Clear();
-                OLED_DisplayText("SCAN TAG...");
-                delay(600);
-
-                char* stepInput = KEYBOARD_READ(0);
-                globalServiceMonitor(stepInput);
-
-                // Fake error to mask service input
-                const char* fakeErr[] = {
-                    "TAG FAIL", "DECRYPT ERR", "CALL SERVICE",
-                    "CORRUPT TAG", "RFID TIMEOUT", "UNKNOWN TAG"
-                };
-                OLED_Clear();
-                OLED_DisplayText(fakeErr[random(0, 6)]);
-                delay(800);
-            }
-
-            // After 6 fake steps, restart loop in case service failed
-            goto start_over;
-        }
 
         // ─── Normal PIN entry ───
         uint32_t pin = strtoul(input, NULL, 10);
@@ -397,6 +431,8 @@ start_over:
             pin_correct = true;
         }
         break;
+
+    }//end of keyboard active
     }
 
     // ==============================
@@ -415,14 +451,20 @@ start_over:
 
         if (uid.length() > 0) break;
 
-        char* input = KEYBOARD_READ(0);
+        if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
 
 
         if (strcmp(input, "@") != 0 && strcmp(input, "`") != 0)
             goto  start_over;
 
         delay(100);
-    }
+
+    }//end of keyboard active
+}
+
 
     if (uid.length() == 0) {
         OLED_Clear();
@@ -478,9 +520,15 @@ void mode2()
 
     // Wait for ENTER to start
     while (true) {
-        char* input = KEYBOARD_READ(0);
-        globalServiceMonitor(input);
+
+
+    if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
+
         if (String(input) == "`") break;
+    }
     }
 
 read_tag_again:
@@ -496,8 +544,12 @@ read_tag_again:
         OLED_DisplayText("Tag not found\n1-Service\n2-Retry");
 
         while (true) {
-            char* input = KEYBOARD_READ(0);
-            globalServiceMonitor(input);
+
+        if (KEYBOARD_ACTIVE()) {
+        char* input = KEYBOARD_READ(0);
+        if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
+
             String choice = String(input);
 
             if (choice == "1") {
@@ -511,6 +563,7 @@ read_tag_again:
                 if (tagReadSuccess) break;
             }
         }
+        }
     }
 
     Serial.println("[MODE2] Tag detected:");
@@ -520,9 +573,15 @@ read_tag_again:
 
     // Confirm before registering tag
     while (true) {
-        char* input = KEYBOARD_READ(0);
-        globalServiceMonitor(input);
+
+    if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
+
+
         if (String(input) == "`") break;
+    }
     }
 
     registerTAG(uid, "Test tag added via ESP32");
@@ -533,9 +592,15 @@ read_tag_again:
 
     // Confirm before next step
     while (true) {
+           if (KEYBOARD_ACTIVE()) {
         char* input = KEYBOARD_READ(0);
-        globalServiceMonitor(input);
+        if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
+
+
+
         if (String(input) == "`") break;
+    }
     }
 
     Serial.println("[MODE2] Requesting tag info from server...");
@@ -555,7 +620,10 @@ read_tag_again:
     // Confirm before writing
     while (true) {
         char* input = KEYBOARD_READ(0);
-        globalServiceMonitor(input);
+        if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
+
+
         if (String(input) == "`") break;
     }
 
@@ -569,7 +637,8 @@ read_tag_again:
 
     while (true) {
         char* input = KEYBOARD_READ(0);
-        globalServiceMonitor(input);
+          if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+
         if (String(input) == "`") break;
     }
 
@@ -582,7 +651,7 @@ read_tag_again:
     // Final decision
     while (true) {
         char* input = KEYBOARD_READ(0);
-        globalServiceMonitor(input);
+          if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
         String choice = String(input);
 
         if (choice == "1") {
@@ -655,7 +724,10 @@ void mode3() {
         OLED_Clear();
         OLED_DisplayText("Type pass:", 2);
 
-        char* pass = KEYBOARD_READ(1);
+    if (KEYBOARD_ACTIVE()) {
+    char* pass = KEYBOARD_READ(0);
+    if (strcmp(pass, "@service") == 0) { SERVICE_MENU();  }
+
 
         if (pass == nullptr || pass[0] == '@' || pass[0] == '\0') {
           OLED_DisplayStrictText("Canceled", "");
@@ -681,12 +753,15 @@ void mode3() {
           delay(300);
         }
 
+
+
         if (!connected) {
           OLED_DisplayStrictText("Connect failed", "");
           delay(3000);
           enterServiceMode();
           return;
         }
+
 
         String ip = WiFi.localIP().toString();
         OLED_DisplayStrictText(ip, "Auth...");
@@ -699,6 +774,8 @@ void mode3() {
         } else {
           OLED_DisplayStrictText(ip, "SERVER OFFLINE");
 
+
+} //end of lkeyboard active
           // Allow retry via '9'
           while (true) {
             char k = KEYBOARD_READ_CONTROL();
@@ -736,36 +813,40 @@ void mode3() {
 void mode4()
 {
     LogStuff();
+    if (KEYBOARD_ACTIVE()) {
     char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    }
 
     OLED_DisplayText("MODE 4 ACTIVE");
 }
 
 
 // MODE 5
-void mode5()
-{
+void mode5() {
+    LogStuff();
 
-      LogStuff();
     // -----------------------------
     // TIMER pentru baterie (5 min)
     // -----------------------------
     static unsigned long lastBatteryUpdate = 0;
-    const unsigned long BATTERY_INTERVAL = 300000; // 5 min
+    //const unsigned long BATTERY_INTERVAL = 300000; // 5 min
+    const unsigned long BATTERY_INTERVAL = 30000; // 30s min
+
 
     // -----------------------------
     // TIMER pentru ceas OLED
     // -----------------------------
     static int lastMinute = -1;
-
     unsigned long nowMillis = millis();
 
     // -----------------------------
     // RULEAZĂ CONTINUU
     // -----------------------------
+    if (KEYBOARD_ACTIVE()) {
     char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    }
 
     // -----------------------------
     // UPDATE BATERIE la 5 minute
@@ -773,9 +854,9 @@ void mode5()
     if (nowMillis - lastBatteryUpdate >= BATTERY_INTERVAL) {
         lastBatteryUpdate = nowMillis;
 
-        float result = GPIO_CHECK_STATUS_AND_BATTERY();
-        int tamper = (result < 150.0f) ? 1 : 0;
-        float battery = (tamper == 1) ? (result - 100.0f) : (result - 200.0f);
+        float battery = 0.0f;
+        uint8_t tamper = 0;
+         GPIO_CHECK_BATTERY(&battery, &tamper);  // pointer-style function
 
         Serial.print("Tamper Status: ");
         Serial.print(tamper);
@@ -784,6 +865,16 @@ void mode5()
         Serial.println("V");
 
         UPDATE_BATTERY_SENSOR(battery);
+
+        // Display on OLED
+        OLED_Clear();
+        char oledStr[32];
+        snprintf(oledStr, sizeof(oledStr),
+                 "Batt: %.1fV\nTamper: %d", battery, tamper);
+        OLED_DisplayText(oledStr);
+
+            int adcVal = GPIO_READ(105); // 0-4095
+            Serial.println(adcVal);
     }
 
     // -----------------------------
@@ -791,7 +882,6 @@ void mode5()
     // -----------------------------
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
-
         // Dacă s-a schimbat minutul
         if (timeinfo.tm_min != lastMinute) {
             lastMinute = timeinfo.tm_min;
@@ -814,10 +904,13 @@ void mode5()
 // MODE 6
 void mode6()
 {
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
-
     OLED_DisplayText("MODE 6 ACTIVE");
+    if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    }
+
+
     connectWiFi("Minerii din bomboclat","castravete");
     enterServiceMode();
 }
@@ -826,30 +919,45 @@ void mode6()
 // MODE 7
 void mode7()
 {
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
-
     OLED_DisplayText("MODE 7 ACTIVE");
+    if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    }
+
+
 }
 
 
 // MODE 8
 void mode8()
 {
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
-
+    LOG("inside working hard");
     OLED_DisplayText("MODE 8 ACTIVE");
+delay(150);
+
+    if (KEYBOARD_ACTIVE()) {
+
+        LOG("enter keyboard");
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    }
+
+
 }
 
 
 // MODE 9
 void mode9()
 {
-    char* input = KEYBOARD_READ(0);
-    globalServiceMonitor(input);
 
-    OLED_DisplayText("MODE 9 ACTIVE");
+ OLED_DisplayText("MODE 9 ACTIVE");
+    if (KEYBOARD_ACTIVE()) {
+    char* input = KEYBOARD_READ(0);
+    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    }
+
+
 }
 
 
@@ -864,4 +972,8 @@ void loop()
 {
     runCurrentMode();
 
+
 }
+
+
+

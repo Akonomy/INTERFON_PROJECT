@@ -2,7 +2,7 @@
 #define GPIO_H
 
 #include <Arduino.h>
-
+#include "log.h"
 
 
 // ===========================
@@ -46,5 +46,6 @@ int  GPIO_READ(uint8_t pin);
 // Check if a pin is valid (returns true if usable)
 bool GPIO_IS_VALID(uint8_t pin);
 float GPIO_CHECK_STATUS_AND_BATTERY();
+void GPIO_CHECK_BATTERY(float* battery, uint8_t* tamper) ;
 uint8_t GPIO_CHECK_TAMPER_FAST();
 #endif

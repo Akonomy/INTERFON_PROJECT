@@ -40,7 +40,7 @@ static void selectMuxChannel(uint8_t ch) {
   digitalWrite(S0, ch & 0x01);
   digitalWrite(S1, (ch >> 1) & 0x01);
   digitalWrite(S2, (ch >> 2) & 0x01);
-  delayMicroseconds(50);
+  delayMicroseconds(32);
 }
 
 // ===========================
@@ -126,8 +126,9 @@ int GPIO_DIGITAL_READ(uint8_t pin) {
   else if (pin >= 100 && pin <= 107) {
     uint8_t ch = pin - 100;
     selectMuxChannel(ch);
+    delay(5);
     int val = analogRead(MUX_INPUT);
-    return (val > 2000) ? HIGH : LOW;
+    return (val > 1500) ? HIGH : LOW;
   }
   else {
     Serial.printf("GPIO_DIGITAL_READ ERROR: unsupported pin %d\n", pin);
@@ -147,6 +148,7 @@ int GPIO_READ(uint8_t pin) {
   else if (pin >= 100 && pin <= 107) {
     uint8_t ch = pin - 100;
     selectMuxChannel(ch);
+    delay(5);
     return analogRead(MUX_INPUT);
   }
   else {
@@ -172,9 +174,14 @@ float GPIO_CHECK_STATUS_AND_BATTERY() {
   bool tamperCompromised = (tamperL == HIGH && tamperH == LOW);
 
   // Step 3: Read battery voltage
-  int adcVal = GPIO_READ(BATTERY_P);  // 0-4095 on ESP32
-  Serial.print(adcVal);
- float vBat = ((float)adcVal / 4095.0f) * 3.3f * 2.4242f * 1.1395f;
+    int adcVal = GPIO_READ(BATTERY_P); // 0–4095
+
+    // Calibrated scale factor (0 -> 0 V), based on 3 measured points
+    const float k = 0.002315f;
+
+    float vBat = k * (float)adcVal;
+
+
 
 
 
@@ -188,6 +195,39 @@ float GPIO_CHECK_STATUS_AND_BATTERY() {
     return 200.0f + vBat;
   }
 }
+
+
+void GPIO_CHECK_BATTERY(float* battery, uint8_t* tamper) {
+    if (!battery || !tamper) return; // safety check
+
+    // Step 1: Activate tamper check
+    GPIO_SET(TAMPER_C, true);
+
+    // Wait 2ms for stable reading
+    delay(2);
+
+    // Step 2: Read tamper pins
+    bool tamperL = GPIO_DIGITAL_READ(TAMPER_L);
+    bool tamperH = GPIO_DIGITAL_READ(TAMPER_H);
+
+    // Tamper logic: compromised if L is HIGH and H is LOW
+    *tamper = (tamperL == HIGH && tamperH == LOW) ? 1 : 0;
+
+    // Step 3: Read battery voltage
+    int adcVal = GPIO_READ(BATTERY_P); // 0–4095
+
+    // Calibrated scale factor (0 -> 0 V), based on 3 measured points
+    const float k = 0.002315f;
+
+    float vBat = k * (float)adcVal;
+
+    *battery = roundf(vBat * 10.0f) / 10.0f;
+
+    // Round to 1 decimal place
+    *battery = roundf(vBat * 10.0f) / 10.0f;
+}
+
+
 
 
 uint8_t GPIO_CHECK_TAMPER_FAST() {

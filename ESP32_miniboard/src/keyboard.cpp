@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <string.h>
 #include "oled.h"
-
+#include "oled_queue.h"
 
 static const uint8_t ROW_PINS[4] = { 201, 204, 203, 202 }; // R2, R4, R6, R7
 static const uint8_t COL_PINS[3] = { 101, 100, 102 }; // C1, C3, C5
@@ -17,11 +17,11 @@ static const char KEYPAD[4][3] = {
     { '*', '0', '#' }
 };
 
-#define DEBOUNCE_DELAY 20
-#define HOLD_THRESHOLD 400
+#define DEBOUNCE_DELAY 19
+#define HOLD_THRESHOLD 300
 #define MAX_INPUT_LEN 16
 
-static char inputBuffer[MAX_INPUT_LEN + 1];
+static char inputBuffer[MAX_INPUT_LEN + 5];
 static int inputIndex = 0;
 static char lastKey = '\0';
 
@@ -33,59 +33,226 @@ void KEYBOARD_INIT() {
     inputIndex = 0;
 }
 
-static bool waitForKeyRelease(char key) {
-    const unsigned long requiredHoldTime = 550;
-    unsigned long pressStart = millis();
 
-    while (true) {
-        KeyEvent ev = KEYBOARD_READ_KEY();
-        if (ev.value != key) {
-            return false; // Released too early or wrong key
-        }
 
-        if (millis() - pressStart >= requiredHoldTime) {
-            break;
-        }
-        delay(10);
+#include <stdint.h>
+
+uint8_t KEYBOARD_ANY_PRESSED() {
+    // 1) drive all rows HIGH
+    for (int i = 0; i < 4; i++) {
+        GPIO_SET(ROW_PINS[i], HIGH);
     }
 
-    // Wait for key release
-    while (KEYBOARD_READ_KEY().value == key) {
-        delay(5);
+    delayMicroseconds(50);  // let mux settle
+
+    // 2) scan all columns
+    for (int col = 0; col < 3; col++) {
+        if (GPIO_DIGITAL_READ(COL_PINS[col]) == HIGH) {
+
+            // restore rows LOW before exit
+            for (int i = 0; i < 4; i++) {
+                GPIO_SET(ROW_PINS[i], LOW);
+            }
+
+            return 1;   // key present
+        }
+    }
+
+    // 3) restore rows LOW when nothing detected
+    for (int i = 0; i < 4; i++) {
+        GPIO_SET(ROW_PINS[i], LOW);
+    }
+
+    return 0;   // no key
+}
+
+
+
+
+
+uint8_t KEYBOARD_ACTIVE()
+{
+    static unsigned long last = 0;
+    static unsigned long interval = 50;        // start fast
+    const unsigned long maxInterval = 1200;    // cap
+
+    unsigned long now = millis();
+
+    // Too soon → do nothing
+    if (now - last < interval) {
+        return 0;
+    }
+
+    last = now;
+
+    // Cheap check — no full scan
+    if (KEYBOARD_ANY_PRESSED()) {
+        interval = 50;    // go fast again
+        return 1;         // wake event
+    }
+
+    // idle → back off a bit
+    interval += 80;
+    if (interval > maxInterval) {
+        interval = maxInterval;
+    }
+
+    // jitter to avoid robotic timing
+    interval += (now & 0x3F);
+
+    return 0;
+}
+
+
+static bool isKeyStillPressed(char key)
+{
+    // rescan matrix ONLY for that key position
+    for (int row = 0; row < 4; ++row) {
+        GPIO_SET(ROW_PINS[row], HIGH);
+        delayMicroseconds(50);
+
+        for (int col = 0; col < 3; ++col) {
+            if (KEYPAD[row][col] == key) {
+                bool pressed = GPIO_DIGITAL_READ(COL_PINS[col]) == HIGH;
+                GPIO_SET(ROW_PINS[row], LOW);
+                return pressed;
+            }
+        }
+        GPIO_SET(ROW_PINS[row], LOW);
+    }
+    return false;
+}
+
+static bool waitForKeyRelease(char key)
+{
+    unsigned long start = millis();
+
+    while (isKeyStillPressed(key)) {
+
+        if (millis() - start > 300) {
+            // timeout auto-release
+            return true;
+        }
+
+        delay(5);   // yields to watchdog
     }
 
     return true;
 }
 
-KeyEvent KEYBOARD_READ_KEY() {
-    for (int row = 0; row < 4; ++row) {
+
+
+
+
+
+
+
+KeyEvent KEYBOARD_READ_KEY(uint8_t mode)
+
+{
+ for (int row = 0; row < 4; ++row) {
+
         GPIO_SET(ROW_PINS[row], HIGH);
 
         for (int col = 0; col < 3; ++col) {
+
             if (GPIO_DIGITAL_READ(COL_PINS[col]) == HIGH) {
+
                 delay(DEBOUNCE_DELAY);
+
                 if (GPIO_DIGITAL_READ(COL_PINS[col]) == HIGH) {
+
                     char key = KEYPAD[row][col];
-                    GPIO_SET(ROW_PINS[row], LOW);
+
+                    unsigned long start = millis();
+
+                    // stay here while pressed to measure hold duration
+                    while (isKeyStillPressed(key)) {
+                        unsigned long held = millis() - start;
+
+                        // -------- MODE 1 : long press * and # only --------
+                        if (mode == 1) {
+
+                            if (key == '*' && held >= 1256) {
+                                waitForKeyRelease(key);
+
+                                GPIO_SET(ROW_PINS[row], LOW);
+
+                                KeyEvent ev = { KEY_CHAR, '[' };
+                                lastKey = '[';
+                                return ev;
+                            }
+
+                            if (key == '#' && held >= 1256) {
+                                waitForKeyRelease(key);
+
+                                GPIO_SET(ROW_PINS[row], LOW);
+
+                                KeyEvent ev = { KEY_CHAR, ']' };
+                                lastKey = ']';
+                                return ev;
+                            }
+                        }
+
+                        // -------- MODE 2 : long press ANY key (except * #) --------
+                        if (mode == 2) {
+
+                            if (key != '*' && key != '#' && held >= 1000) {
+
+                                waitForKeyRelease(key);
+
+                                GPIO_SET(ROW_PINS[row], LOW);
+
+                                // return "~<key>" as single char '~' + key
+                                // e.g., long press '5' → '~5'
+                                KeyEvent ev;
+                                ev.type = KEY_CHAR;
+                                ev.value = '~';   // base marker
+
+                                // You can alternatively pack both if desired,
+                                // but requirement says: return ~ + key pressed
+                                // If you want literal two characters, adjust buffer logic.
+
+                                lastKey = '~';
+                                return ev;
+                            }
+                        }
+                    }
+
+                    // ---------- Normal flow (no long press detected) ----------
+
                     waitForKeyRelease(key);
+
+                    GPIO_SET(ROW_PINS[row], LOW);
 
                     KeyEvent ev;
                     ev.value = key;
 
-                    if (key == '#') ev.type = KEY_ENTER;
-                    else if (key == '*') ev.type = KEY_CLEAR;
-                    else ev.type = KEY_CHAR;
+                    if (key == '#') {
+                        ev.type = KEY_ENTER;
+                    }
+                    else if (key == '*') {
+                        ev.type = KEY_CLEAR;
+                    }
+                    else {
+                        ev.type = KEY_CHAR;
+                    }
 
                     lastKey = key;
                     return ev;
                 }
             }
         }
+
         GPIO_SET(ROW_PINS[row], LOW);
     }
+
     KeyEvent none = { KEY_NONE, '\0' };
     return none;
 }
+
+
+
 
 int KEYBOARD_READ_NUMBER(int maxDigits) {
     inputIndex = 0;
@@ -250,6 +417,8 @@ void KEYBOARD_READ_STRING(char* buffer, int maxLen, bool stopOnEnter) {
 
 char* KEYBOARD_READ(uint8_t mode)
 {
+    LOG_MIN("KEYBOARD_READ: ENTER");
+
     static char buffer[32];
     memset(buffer, 0, sizeof(buffer));
 
@@ -262,92 +431,126 @@ char* KEYBOARD_READ(uint8_t mode)
     const unsigned long inputTimeout = 15000; // 15 seconds to finish typing
     const unsigned long idleTimeout = 5000;   // 5 seconds no key at all = return
 
-    unsigned long lastKeyTime = millis();     // last key press time
-    unsigned long startTime = millis();       // total idle time
+    unsigned long lastKeyTime = millis();
+    unsigned long startTime = millis();
+
+    LOG("KEYBOARD_READ: initial timers set");
 
     while (true)
     {
+        if (keyboardNeedsRefresh) {
+            LOG("KEYBOARD_REFRESH");
+            OLED_Clear();
 
-         if (keyboardNeedsRefresh) {
-                OLED_Clear();
-                if (!isPassword)
-                    OLED_DisplayText(buffer, textSize);
-                else
-                    OLED_DisplayText("``", 3);
+            if (!isPassword)
+                OLED_DisplayText(buffer, textSize);
+            else
+                OLED_DisplayText("**", 3);
 
-                keyboardNeedsRefresh = false; // reset flag
-            }
+            keyboardNeedsRefresh = false;
+        }
+
         char ch;
         KeyEvent ev;
 
+        // ---------- MODE 1 ----------
         if (mode == 1)
         {
             ch = KEYBOARD_READ_CHAR();
+
             if (ch == '\0') {
-                // check timeouts
+
+                // ---- TIMEOUTS ----
                 if (millis() - lastKeyTime > inputTimeout && index > 0) {
-                    Serial.println("⏱️ INPUT TIMEOUT → discarding partial input");
+                    LOG_MIN("TIMEOUT: INPUT PARTIAL DISCARDED");
+                    delay(200);
                     return (char*)"@TIME";
                 }
 
                 if (millis() - startTime > idleTimeout && index == 0) {
-                    Serial.println("💤 IDLE TIMEOUT → no key pressed at all");
+                    LOG_MIN("TIMEOUT: NO KEY ACTIVITY");
+                    delay(200);
                     return (char*)"@NONE";
                 }
 
                 delay(50);
                 continue;
             }
-
-
         }
         else
+        // ---------- EVENT MODE ----------
         {
-            ev = KEYBOARD_READ_KEY();
+           // ---------- EVENT MODE ----------
+{
+            // daca bufferul e gol -> foloseste modul 1 (long press *, #)
+            if (index == 0){
+                ev = KEYBOARD_READ_KEY(1);
+            }
+            else{
+                ev = KEYBOARD_READ_KEY();
+            }
+
             if (ev.type == KEY_NONE) {
-                // same timeout checks
+
                 if (millis() - lastKeyTime > inputTimeout && index > 0) {
-                    Serial.println("⏱️ INPUT TIMEOUT → discarding partial input");
+                    LOG_MIN("TIMEOUT: INPUT PARTIAL DISCARDED");
                     return (char*)"@TIME";
                 }
 
                 if (millis() - startTime > idleTimeout && index == 0) {
-                   // Serial.println("💤 IDLE TIMEOUT → no key pressed at all");
+                    LOG_MIN("TIMEOUT: NO KEY ACTIVITY");
                     return (char*)"@NONE";
                 }
 
                 delay(50);
                 continue;
             }
+
             ch = ev.value;
         }
 
-        // key was pressed — reset timers
+        // key pressed — reset timeouts
         lastKeyTime = millis();
-        startTime = millis(); // restart idle timeout too
+        startTime   = millis();
 
 
 
-        // ENTER (#)
+        //------------SERVICE------------
+
+          if (ch == ']')
+        {
+            LOG_MIN("SERVICE MODE TRIGGER");
+
+            OLED_Clear();
+            OLED_DisplayText("***", 2);
+            delay(200);
+
+            return (char*)"@service";
+        }
+
+
+
+
+        // ---------- ENTER (#) ----------
         if (ch == '#')
         {
+            LOG_MIN("ENTER PRESSED — RETURNING INPUT");
+
             OLED_Clear();
 
             if (index == 0)
-            {
-                buffer[0] = '`';
-            }
+                buffer[0] = 0;
 
-            Serial.println("🔓 ENTER pressed → returning input:");
-            Serial.println(buffer);
+            LOG(buffer);   // full log prints content
             return buffer;
         }
 
-        // BACKSPACE (*)
+        // ---------- BACKSPACE (*) ----------
         if (ch == '*')
         {
-            if (index > 0)
-            {
+            LOG("BACKSPACE");
+
+            if (index > 0) {
                 index--;
                 buffer[index] = '\0';
             }
@@ -356,42 +559,49 @@ char* KEYBOARD_READ(uint8_t mode)
             if (!isPassword)
                 OLED_DisplayText(buffer, textSize);
             else
-                OLED_DisplayText("``", textSize);
+                OLED_DisplayText("**", textSize);
+
             continue;
         }
 
-        // FULL BUFFER
+        // ---------- FULL BUFFER ----------
         if (index >= maxLen)
         {
+            LOG_MIN("INPUT LIMIT REACHED");
+
             OLED_Clear();
             OLED_DisplayText("MAX LIMIT", 2);
             delay(400);
+
             OLED_Clear();
             if (!isPassword)
                 OLED_DisplayText(buffer, textSize);
             else
-                OLED_DisplayText("``", 3);
+                OLED_DisplayText("**", 3);
+
             continue;
         }
 
-        // ADD CHARACTER
+        // ---------- NORMAL CHAR ----------
         if (ch != '*' && ch != '#') {
+
+            LOG("CHAR ADDED");
+
             buffer[index++] = ch;
             buffer[index] = '\0';
 
             OLED_Clear();
+
             if (!isPassword)
                 OLED_DisplayText(buffer, textSize);
-            else {
-                OLED_Clear();
-                OLED_DisplayText("``", 3);
-            }
+            else
+                OLED_DisplayText("**", 3);
         }
 
         OLED_Update();
     }
 }
-
+}
 
 
 

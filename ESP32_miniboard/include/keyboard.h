@@ -4,6 +4,9 @@
 
 #include <stdint.h>
 #include "oled.h"
+#include "oled_queue.h"
+#include "log.h"
+
 // === Key Types ===
 typedef enum {
     KEY_NONE = 0,   // No key pressed
@@ -16,14 +19,24 @@ typedef enum {
 typedef struct {
     KeyType type;   // Type of key event
     char value;     // Key value (e.g., '5', '*' or '#')
+    bool isLongPress;
 } KeyEvent;
+
+
+
+#define KEY_HOLD_TIMEOUT 456  // ms
+
+
+uint8_t KEYBOARD_ANY_PRESSED();
+uint8_t KEYBOARD_ACTIVE();
 
 // === Initialization ===
 void KEYBOARD_INIT(); // Call once during setup
 
 // === Basic Key Reading ===
 // Reads a key, waits for release, debounced
-KeyEvent KEYBOARD_READ_KEY();
+KeyEvent KEYBOARD_READ_KEY(uint8_t mode=0);
+
 
 // === Multi-Digit Input ===
 // Read digits until '#' or maxDigits reached

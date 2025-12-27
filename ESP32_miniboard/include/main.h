@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "oled_queue.h"
 
 // -----------------------
 // MODE SYSTEM

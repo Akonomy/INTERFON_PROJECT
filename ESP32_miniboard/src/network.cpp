@@ -666,8 +666,22 @@ String getSSIDFromStoredBSSID(uint8_t bssid[6]) {
 
 
 
-//MONITOR SERVER STATUS
+// MONITOR SERVER STATUS (rate-limited)
 bool pingServer() {
+
+    static unsigned long lastPingMs = 0;
+    static bool lastStatus = true;   // default assume OK
+    const unsigned long PING_INTERVAL = 60UL * 1000UL;  // 1 minute
+
+    unsigned long now = millis();
+
+    // If called too soon, just return the cached result
+    if (now - lastPingMs < PING_INTERVAL) {
+        return lastStatus;
+    }
+
+    lastPingMs = now;  // update timestamp because we will actually ping
+
     HTTPClient http;
     http.begin(BASE_URL + "/api/ping/");
     int code = http.GET();
@@ -676,7 +690,10 @@ bool pingServer() {
 
     Serial.println("🔎 Ping response: " + response);
 
-    return (code == 200 && response.indexOf("hey") >= 0);
+    // Update cached status
+    lastStatus = (code == 200 && response.indexOf("hey") >= 0);
+
+    return lastStatus;
 }
 
 
@@ -735,4 +752,58 @@ void monitorServerStatus(int mode) {
     }
 
     lastStatusKnown = true;
+}
+
+
+
+
+
+
+
+
+
+
+bool shouldLog(uint16_t intervalMin) {
+    // 0 = disabled
+    if (intervalMin == 0)
+        return false;
+
+    // Clamp to max supported (24h)
+    if (intervalMin > 1440)
+        intervalMin = 1440;
+
+    static uint16_t lastLogMinute   = 65535; // last successful log
+    static uint16_t lastCheckMinute = 65535; // spam throttle
+
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo))
+        return false;
+
+    uint16_t nowMin =
+        (uint16_t)(timeinfo.tm_hour * 60 + timeinfo.tm_min);
+
+    // Spam guard: only evaluate once per minute
+    if (nowMin == lastCheckMinute)
+        return false;
+
+    lastCheckMinute = nowMin;
+
+    // First valid call → log immediately
+    if (lastLogMinute == 65535) {
+        lastLogMinute = nowMin;
+        return true;
+    }
+
+    // Elapsed minutes (midnight safe)
+    uint16_t elapsed =
+        (nowMin >= lastLogMinute)
+        ? (nowMin - lastLogMinute)
+        : (1440 - lastLogMinute + nowMin);
+
+    if (elapsed >= intervalMin) {
+        lastLogMinute = nowMin;
+        return true;
+    }
+
+    return false;
 }

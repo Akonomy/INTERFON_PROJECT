@@ -81,6 +81,8 @@ void logSensorEvent(uint8_t code,
 
 
 
+bool pingServer() ;
+
 
 
 
@@ -104,6 +106,6 @@ String getSSIDFromStoredBSSID(uint8_t bssid[6]);
 
 void monitorServerStatus(int mode = -1);
 
-
+bool shouldLog(uint16_t intervalMin) ;
 
 #endif
