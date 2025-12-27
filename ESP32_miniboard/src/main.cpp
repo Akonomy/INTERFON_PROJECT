@@ -168,12 +168,38 @@ void SERVICE_MENU()
 
             // ---------- add your future menus here ----------
             case 50001:
+            {
                 LOG_MIN("option 50001 selected");
+
                 OLED_Clear();
-                OLED_DisplayText("OP 50001", 2);
+                OLED_DisplayText("CHECK TAG", 2);
                 OLED_Update();
-                delay(800);
+
+                // încercăm să verificăm tag-ul de service
+                uint8_t ok = check_service_tag();
+
+                if (ok == 1) {
+                    LOG_MIN("SERVICE TAG OK");
+                    OLED_Clear();
+                    OLED_DisplayText("SERVICE OK", 2);
+                    OLED_Update();
+                    delay(200);
+
+                    enterServiceMode();
+                    return;
+                }
+
+                // tag invalid sau nu poate fi citit
+                LOG("SERVICE TAG INVALID or READ FAIL");
+
+                OLED_Clear();
+                OLED_DisplayText("TAG ERROR", 2);
+                OLED_Update();
+                delay(200);
+
                 return;
+            }
+
 
             case 50002:
                 LOG_MIN("option 50002 selected");
@@ -283,7 +309,7 @@ void setMode(int mode)
 
 void runCurrentMode()
 {
-    //monitorServerStatus(currentMode);
+    monitorServerStatus(currentMode);
 
     switch (currentMode)
     {
@@ -449,7 +475,24 @@ start_over:
     {
         rfid_readTag(uid, data);
 
-        if (uid.length() > 0) break;
+        if (uid.length() > 0) {
+
+            // 🔧 SERVICE TAG CHECK HERE
+            if (check_service_tag() == 1) {
+                LOG_MIN("SERVICE TAG detected in MODE1");
+                OLED_Clear();
+                OLED_DisplayText("SERVICE MODE");
+                delay(300);
+                enterServiceMode();
+                return;
+            }
+
+            break; // alt tag → continuă logica normală
+
+
+}
+
+
 
         if (KEYBOARD_ACTIVE()) {
     char* input = KEYBOARD_READ(0);
@@ -510,163 +553,215 @@ start_over:
 
         Serial.print("f _mode1_ ");
 }
-
-
 void mode2()
 {
-    String uid, data;
+    LOG_MIN("MODE2 start");
+
+    String uid;
+    String data;
+    String infoResponse;
+
+    /************************************************************
+     * WAIT FOR USER TO START
+     ************************************************************/
     OLED_Clear();
-    OLED_DisplayText("Press ENTER to start");
+    OLED_DisplayStrictText(
+        "APASA ENTER PENTRU",
+        "A INREGISTRA TAG"
+    );
 
-    // Wait for ENTER to start
-    while (true) {
-
-
-    if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-
-
-        if (String(input) == "`") break;
-    }
+    while (true)
+    {
+        char key = KEYBOARD_READ_CONTROL();
+        if (key == '1' || key == 'B') { enterServiceMode(); return; }
+        if (key == 'E') break;
     }
 
-read_tag_again:
+    /************************************************************
+     * ─────────────── STEP 1 — READ TAG ───────────────
+     ************************************************************/
+step1_readTag:
 
-    OLED_Clear();
-    OLED_DisplayText("Approach tag...");
+    LOG("STEP1: read tag");
 
-    // Try reading the RFID tag
-    bool tagReadSuccess = rfid_readTag(uid, data);
+    {
+        const unsigned long timeoutMs = 60000UL; // 1 min
+        const unsigned long intervalMs = 3000UL; // 3 s
 
-    while (!tagReadSuccess) {
-        OLED_Clear();
-        OLED_DisplayText("Tag not found\n1-Service\n2-Retry");
+        unsigned long start = millis();
 
-        while (true) {
+        while (millis() - start < timeoutMs)
+        {
+            OLED_Clear();
+            OLED_DisplayStrictText("APROPIATI TAGUL", "DE CITITOR");
 
-        if (KEYBOARD_ACTIVE()) {
-        char* input = KEYBOARD_READ(0);
-        if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-
-
-            String choice = String(input);
-
-            if (choice == "1") {
-                Serial.println("[MODE2] Switching to SERVICE MODE...");
-                enterServiceMode();
-                return;
-            } else if (choice == "2") {
-                OLED_Clear();
-                OLED_DisplayText("Retrying...\nApproach tag");
-                tagReadSuccess = rfid_readTag(uid, data);
-                if (tagReadSuccess) break;
+            if (rfid_readTag(uid, data))
+            {
+                LOG_MIN("TAG DETECTED");
+                goto step2_registerTag;
             }
+
+            OLED_DisplayStrictText("TAG NEDISPONIBIL", "RETRY AUTO...");
+            delay(intervalMs);
         }
+    }
+
+    // ---- failure handling for step 1 ----
+    {
+        LOG_MIN("STEP1 timeout");
+
+        unsigned long start = millis();
+        const unsigned long wait30 = 30000UL;
+
+        while (millis() - start < wait30)
+        {
+            unsigned long secLeft = (wait30 - (millis() - start)) / 1000;
+
+            char line2[21];
+            snprintf(line2, sizeof(line2), "%lu sec pana service", secLeft);
+
+            OLED_Clear();
+            OLED_DisplayStrictText("APASA TASTA", line2);
+
+            if (KEYBOARD_ACTIVE_PULSE())
+            {
+                LOG_MIN("Retry STEP1");
+                goto step1_readTag;
+            }
+
+            delay(200);
         }
-    }
 
-    Serial.println("[MODE2] Tag detected:");
-    Serial.println(uid);
-    OLED_Clear();
-    OLED_DisplayText("Tag OK\nPress ENTER");
-
-    // Confirm before registering tag
-    while (true) {
-
-    if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-
-
-
-        if (String(input) == "`") break;
-    }
-    }
-
-    registerTAG(uid, "Test tag added via ESP32");
-    Serial.println("[MODE2] Tag registered");
-
-    OLED_Clear();
-    OLED_DisplayText("Registered\nPress ENTER");
-
-    // Confirm before next step
-    while (true) {
-           if (KEYBOARD_ACTIVE()) {
-        char* input = KEYBOARD_READ(0);
-        if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-
-
-
-
-        if (String(input) == "`") break;
-    }
-    }
-
-    Serial.println("[MODE2] Requesting tag info from server...");
-    String infoResponse = getTagInfo(uid);
-    Serial.println(infoResponse);
-
-    if (infoResponse == "") {
-        Serial.println("❌ API error: No response");
-        OLED_Clear();
-        OLED_DisplayText("API ERROR");
+        enterServiceMode();
         return;
     }
 
-    OLED_Clear();
-    OLED_DisplayText("Info OK\nPress ENTER");
+    /************************************************************
+     * ─────────────── STEP 2 — REGISTER TAG ───────────────
+     ************************************************************/
+step2_registerTag:
 
-    // Confirm before writing
-    while (true) {
-        char* input = KEYBOARD_READ(0);
-        if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    LOG_MIN("STEP2: register TAG");
 
-
-
-        if (String(input) == "`") break;
-    }
-
-    // Prepare to write tag
-    String tagWriteData = serverToTagPlaintext(infoResponse);
-    Serial.println("[MODE2] Data to be written:");
-    Serial.println(tagWriteData);
+    registerTAG(uid, "Test tag added via ESP32");
 
     OLED_Clear();
-    OLED_DisplayText("Approach tag\nPress ENTER");
+    OLED_DisplayStrictText("INREGISTRARE...", "ASTEAPTATI");
 
-    while (true) {
-        char* input = KEYBOARD_READ(0);
-          if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    {
+        uint8_t approved = waitForTagFullyApproved(uid);
 
-        if (String(input) == "`") break;
-    }
+        if (approved == 1)
+        {
+            infoResponse = getTagInfo(uid);
+            if (infoResponse == "") {
+                LOG_MIN("Server info empty");
+                goto step2_registerTag_fail;
+            }
 
-    rfid_writeTag(tagWriteData);
-    Serial.println("✅ Tag written successfully.");
-
-    OLED_Clear();
-    OLED_DisplayText("1-Service\n2-More");
-
-    // Final decision
-    while (true) {
-        char* input = KEYBOARD_READ(0);
-          if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-        String choice = String(input);
-
-        if (choice == "1") {
-            Serial.println("[MODE2] Switching to SERVICE MODE...");
-            enterServiceMode();
-            return;
-        } else if (choice == "2") {
-            Serial.println("[MODE2] Restarting mode2...");
-            goto read_tag_again;  // Restart tag registration
+            goto step3_writeTag;
         }
     }
 
+step2_registerTag_fail:
 
-    Serial.println("ex[MODE2]");
+    LOG_MIN("STEP2 failed");
+
+    {
+        unsigned long start = millis();
+        const unsigned long wait30 = 30000UL;
+
+        while (millis() - start < wait30)
+        {
+            unsigned long secLeft = (wait30 - (millis() - start)) / 1000;
+
+            char line2[21];
+            snprintf(line2, sizeof(line2), "%lu sec pana service", secLeft);
+
+            OLED_Clear();
+            OLED_DisplayStrictText("INREGISTRARE ESUATA", line2);
+
+            if (KEYBOARD_ACTIVE_PULSE())
+            {
+                LOG_MIN("Retry STEP2");
+                goto step2_registerTag;
+            }
+
+            delay(200);
+        }
+
+        enterServiceMode();
+        return;
+    }
+
+    /************************************************************
+     * ─────────────── STEP 3 — WRITE TAG ───────────────
+     ************************************************************/
+step3_writeTag:
+
+    LOG_MIN("STEP3: write TAG");
+
+    String tagWriteData = serverToTagPlaintext(infoResponse);
+
+    {
+        const unsigned long timeoutMs = 60000UL;
+        const unsigned long intervalMs = 3500UL;
+
+        unsigned long start = millis();
+
+        while (millis() - start < timeoutMs)
+        {
+            OLED_Clear();
+            OLED_DisplayStrictText("APROPIATI TAGUL", "PENTRU SCRIERE");
+
+            if (rfid_writeTag(tagWriteData))
+            {
+                LOG_MIN("WRITE OK");
+
+                OLED_Clear();
+                OLED_DisplayStrictText("SCRIERE OK", "TAG FINALIZAT");
+                delay(1200);
+
+                enterServiceMode();
+                return;
+            }
+
+            OLED_DisplayStrictText("SCRIERE ESUATA", "RETRY AUTO...");
+            delay(intervalMs);
+        }
+    }
+
+    // ---- failure handling for step 3 ----
+    {
+        LOG_MIN("STEP3 timeout");
+
+        unsigned long start = millis();
+        const unsigned long wait30 = 30000UL;
+
+        while (millis() - start < wait30)
+        {
+            unsigned long secLeft = (wait30 - (millis() - start)) / 1000;
+
+            char line2[21];
+            snprintf(line2, sizeof(line2), "%lu sec pana service", secLeft);
+
+            OLED_Clear();
+            OLED_DisplayStrictText("SCRIERE ESUATA", line2);
+
+            if (KEYBOARD_ACTIVE_PULSE())
+            {
+                LOG_MIN("Retry STEP3");
+                goto step3_writeTag;
+            }
+
+            delay(200);
+        }
+
+        enterServiceMode();
+        return;
+    }
 }
+
 
 
 void mode3() {
@@ -812,14 +907,100 @@ void mode3() {
 // MODE 4
 void mode4()
 {
-    LogStuff();
+    static unsigned long lastSkipLog = 0;
+
+    char key = 0;
+
     if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+        key = KEYBOARD_READ_CONTROL();
     }
 
-    OLED_DisplayText("MODE 4 ACTIVE");
+    // ==========================
+    // dacă NU e ENTER -> ieșim
+    // ==========================
+    if (key != 'E') {
+
+        unsigned long now = millis();
+
+        if (now - lastSkipLog > 10000) {
+            lastSkipLog = now;
+            LOG("MODE4 idle / waiting ENTER");
+        }
+
+        return;
+    }
+
+    // ==========================
+    // ENTER apăsat -> execută flow-ul complet
+    // ==========================
+    LOG_MIN("MODE4 ENTER pressed");
+
+    OLED_Clear();
+    OLED_DisplayText("Checking TAG...");
+
+    String uid, data;
+
+    // încercăm să citim TAG
+    if (!rfid_readTag(uid, data)) {
+
+        OLED_Clear();
+        OLED_DisplayText("TAG ERROR");
+        LOG_MIN("TAG read failed / no tag present");
+
+        delay(200);
+
+        // NU scriem, NU verificăm
+        LOG("Skipping write – invalid or missing tag");
+
+        return;
+    }
+
+    LOG_MIN("TAG detected OK");
+
+    // ==========================
+    // scriere SERVICE TAG
+    // ==========================
+    uint8_t reg = register_service_tag();
+
+    if (!reg) {
+        LOG_MIN("SERVICE TAG WRITE FAILED");
+
+        OLED_Clear();
+        OLED_DisplayText("WRITE ERROR");
+        delay(200);
+
+        return;
+    }
+
+    // ==========================
+    // verificare SERVICE TAG
+    // ==========================
+    uint8_t chk = check_service_tag();
+
+    if (!chk) {
+        LOG_MIN("SERVICE TAG VERIFY FAILED");
+
+        OLED_Clear();
+        OLED_DisplayText("VERIFY ERROR");
+        delay(200);
+
+        return;
+    }
+
+    // ==========================
+    // SUCCESS
+    // ==========================
+    LOG_MIN("SERVICE TAG OK");
+
+    OLED_Clear();
+    OLED_DisplayText("SERVICE OK");
+
+    delay(200);
+
+    enterServiceMode();
 }
+
+
 
 
 // MODE 5
@@ -830,8 +1011,8 @@ void mode5() {
     // TIMER pentru baterie (5 min)
     // -----------------------------
     static unsigned long lastBatteryUpdate = 0;
-    //const unsigned long BATTERY_INTERVAL = 300000; // 5 min
-    const unsigned long BATTERY_INTERVAL = 30000; // 30s min
+    const unsigned long BATTERY_INTERVAL = 300000; // 5 min
+    //const unsigned long BATTERY_INTERVAL = 30000; // 30s min
 
 
     // -----------------------------
@@ -919,21 +1100,50 @@ void mode6()
 // MODE 7
 void mode7()
 {
-    OLED_DisplayText("MODE 7 ACTIVE");
-    if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    OLED_Clear();
+    OLED_DisplayText("MODE 7 ACTIVE", 2);
+
+    String uid = "TEST12345";
+
+    // 1) send mock registration request
+    registerTAG(uid, "Mock test tag");
+
+    OLED_Clear();
+    OLED_DisplayStrictText("REQUEST SENT", "WAITING STATUS");
+    delay(800);
+
+    // 2) wait/poll for approval workflow
+    uint8_t result = waitForTagFullyApproved(uid);
+
+    // 3) show final result
+    OLED_Clear();
+
+    if (result == 1)
+    {
+        OLED_DisplayStrictText(
+            "FINAL RESULT:",
+            "TAG FULL APPROVED"
+        );
+    }
+    else
+    {
+        OLED_DisplayStrictText(
+            "FINAL RESULT:",
+            "NOT APPROVED"
+        );
     }
 
+    delay(1500);
 
+    // 4) always go back to service mode
+    enterServiceMode();
 }
+
 
 
 // MODE 8
 void mode8()
 {
-    LOG("inside working hard");
-    OLED_DisplayText("MODE 8 ACTIVE");
 delay(150);
 
     if (KEYBOARD_ACTIVE()) {

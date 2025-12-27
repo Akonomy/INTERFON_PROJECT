@@ -578,3 +578,51 @@ String serverToTagPlaintext(const String& jsonResponse)
 }
 
 
+
+
+const String SERVICE_ACCESS_TOKEN = "SERVICE-ACCESS";
+
+
+uint8_t register_service_tag()
+{
+    String uid, decoded;
+
+    String plaintext = SERVICE_ACCESS_TOKEN;
+
+    // scrie (criptat automat)
+    if (!rfid_writeTag(plaintext)) {
+        return 0;
+    }
+
+    // citește înapoi pentru verificare
+    if (!rfid_readTag(uid, decoded)) {
+        return 0;
+    }
+
+    // verificare corectitudine
+    if (decoded == SERVICE_ACCESS_TOKEN) {
+        return 1;
+    }
+
+    return 0;
+}
+
+
+uint8_t check_service_tag()
+{
+    String uid, decoded;
+
+    // citire (decriptează automat)
+    if (!rfid_readTag(uid, decoded)) {
+        return 0;
+    }
+
+    // verifică tokenul
+    if (decoded == SERVICE_ACCESS_TOKEN) {
+        return 1;
+    }
+
+    return 0;
+}
+
+

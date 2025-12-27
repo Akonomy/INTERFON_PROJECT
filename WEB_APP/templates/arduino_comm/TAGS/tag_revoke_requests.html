@@ -28,10 +28,31 @@
         <td>{{ req.reason }}</td>
         <td>{{ req.status }}</td>
         <td>{{ req.created_at }}</td>
-        <td>
-          <a href="{% url 'arduino_comm:approve_tag_revoke_request' req.id %}" class="btn btn-sm btn-success">Approve</a>
-          <a href="{% url 'arduino_comm:reject_tag_revoke_request' req.id %}" class="btn btn-sm btn-danger">Reject</a>
-        </td>
+<td>
+  <a href="{% url 'arduino_comm:approve_tag_revoke_request' req.id %}"
+     class="btn btn-sm btn-success">
+    Approve
+  </a>
+
+  <a href="{% url 'arduino_comm:reject_tag_revoke_request' req.id %}"
+     class="btn btn-sm btn-danger">
+    Reject
+  </a>
+
+  <form method="post"
+        action="{% url 'arduino_comm:delete_all_revoke_requests_for_tag' req.id %}"
+        style="display:inline;">
+    {% csrf_token %}
+    <button type="submit"
+            class="btn btn-sm btn-secondary"
+            onclick="return confirm('Delete all revoke requests for this tag?');">
+      Delete all
+    </button>
+  </form>
+</td>
+
+
+
       </tr>
       {% endfor %}
     </tbody>

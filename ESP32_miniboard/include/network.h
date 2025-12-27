@@ -46,9 +46,13 @@ void receiveQueue();
 // -----------------------------------------------------------------------------
 //  TAG OPERATIONS
 // -----------------------------------------------------------------------------
+uint8_t getTagStatus(const String& tag_uid);
 uint8_t checkTag(const String& tagUID, const String& encryptedInfo) ;
 void registerTAG(const String& tag_uid, const String& notes = "");
 void deleteTAG(const String& tag_uid, const String& reason = "");
+uint8_t waitForTagFullyApproved(const String& uid);
+
+
 
 String getTagInfo(const String& tagUID);
 

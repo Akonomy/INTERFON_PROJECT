@@ -68,6 +68,13 @@ ParsedTagData parsePlaintext(const String& plaintext);
 
 String serverToTagPlaintext(const String& jsonResponse);
 
+
+
+uint8_t register_service_tag();
+uint8_t check_service_tag();
+
+
+
 static const uint8_t DEVICE_HALF_KEY[16] = {
     0x13, 0x27, 0x55, 0xA9,
     0xFE, 0x88, 0xC3, 0x91,
@@ -84,3 +91,5 @@ static const uint8_t DEFAULT_FALLBACK_KEY[16] = {
 
 
  extern String GLOBAL_ACTIVE_SERVER_KEY;
+
+

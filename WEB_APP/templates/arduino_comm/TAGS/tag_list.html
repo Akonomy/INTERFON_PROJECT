@@ -1,45 +1,88 @@
 {% extends "arduino_comm/TAGS/base.html" %}
+
 {% block title %}Tags{% endblock %}
+
 {% block content %}
-  <h2>Tag List</h2>
-  <a href="{% url 'arduino_comm:tag_add' %}" class="btn btn-success mb-2">Add New Tag</a>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>UID</th>
-        <th>Owner</th>
-        <th>Allowed</th>
-        <th>Description</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for tag in tags %}
-      <tr>
-        <td>{{ tag.uid }}</td>
-        <td>
-  {% if tag.owner %}
-    {{ tag.owner.full_name }}
-  {% else %}
-    Unassigned
-  {% endif %}
-</td>
-        <td>{{ tag.is_allowed }}</td>
-        <td>{{ tag.description }}</td>
-        <td>
-          <a href="{% url 'arduino_comm:tag_edit' tag.id %}" class="btn btn-sm btn-primary">Edit</a>
-          <form action="{% url 'arduino_comm:tag_delete' tag.id %}" method="post" style="display:inline;">
-            {% csrf_token %}
-            <button class="btn btn-sm btn-danger">Delete</button>
-          </form>
-          {% if not tag.is_allowed %}
-          <a href="{% url 'arduino_comm:tag_allow' tag.id %}" class="btn btn-sm btn-success">Allow</a>
-          {% else %}
-          <a href="{% url 'arduino_comm:tag_revoke' tag.id %}" class="btn btn-sm btn-warning">Revoke</a>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+
+<h2 class="mb-3">Tag List</h2>
+
+<a href="{% url 'arduino_comm:tag_add' %}"
+   class="btn btn-cyan mb-3">
+  Add New Tag
+</a>
+
+<table class="table table-dark table-hover">
+  <thead>
+    <tr>
+      <th>UID</th>
+      <th>Owner</th>
+      <th>Status</th>
+      <th>Description</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for tag in tags %}
+    <tr>
+      <td>{{ tag.uid }}</td>
+
+      <td>
+        {% if tag.owner %}
+          {{ tag.owner.full_name }}
+        {% else %}
+          <span class="text-muted">Unassigned</span>
+        {% endif %}
+      </td>
+
+      <td>
+        {% if tag.is_allowed %}
+          <span class="badge bg-success">Allowed</span>
+        {% else %}
+          <span class="badge bg-danger">Revoked</span>
+        {% endif %}
+      </td>
+
+      <td>{{ tag.description|default:"—" }}</td>
+
+      <td>
+        <a href="{% url 'arduino_comm:tag_edit' tag.id %}"
+           class="btn btn-sm btn-primary">
+          Edit
+        </a>
+
+        <form action="{% url 'arduino_comm:tag_delete' tag.id %}"
+              method="post"
+              style="display:inline;">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-danger"
+                  onclick="return confirm('Delete this tag permanently?');">
+            Delete
+          </button>
+        </form>
+
+        {% if not tag.is_allowed %}
+          <a href="{% url 'arduino_comm:tag_allow' tag.id %}"
+             class="btn btn-sm btn-success">
+            Allow
+          </a>
+        {% else %}
+          <a href="{% url 'arduino_comm:tag_revoke' tag.id %}"
+             class="btn btn-sm btn-warning">
+            Revoke
+          </a>
+        {% endif %}
+      </td>
+    </tr>
+
+    {% empty %}
+    <tr>
+      <td colspan="5" class="text-center text-muted">
+        No tags found.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 {% endblock %}

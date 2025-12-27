@@ -68,6 +68,52 @@ uint8_t KEYBOARD_ANY_PRESSED() {
 
 
 
+uint8_t KEYBOARD_ACTIVE_PULSE()
+{
+    const unsigned long windowMs = 1000;   // ~1 second total window
+    const unsigned long stepMs   = 90;     // check every ~90 ms
+
+    unsigned long start = millis();
+    unsigned long lastCheck = 0;
+
+    // drive all rows HIGH once
+    for (int r = 0; r < 4; r++) {
+        GPIO_SET(ROW_PINS[r], HIGH);
+    }
+
+    while (millis() - start < windowMs)
+    {
+        unsigned long now = millis();
+
+        // wait until 90ms boundary
+        if (now - lastCheck < stepMs)
+            continue;
+
+        lastCheck = now;
+
+        // ---- sequential column scan ----
+        for (int col = 0; col < 3; col++)
+        {
+            if (GPIO_DIGITAL_READ(COL_PINS[col]) == HIGH)
+            {
+                // restore rows LOW before exit
+                for (int r = 0; r < 4; r++) {
+                    GPIO_SET(ROW_PINS[r], LOW);
+                }
+
+                return 1;   // activity detected
+            }
+        }
+    }
+
+    // ---- timeout, no keyboard activity ----
+    for (int r = 0; r < 4; r++) {
+        GPIO_SET(ROW_PINS[r], LOW);
+    }
+
+    return 0;
+}
+
 
 
 uint8_t KEYBOARD_ACTIVE()

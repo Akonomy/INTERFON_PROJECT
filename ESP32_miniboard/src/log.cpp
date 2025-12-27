@@ -82,17 +82,17 @@ void LogStuff() {
 
     // -------- BATERIE --------
     if (!alertTriggered) {
-        if (battery < 3.3f) {
+        if (battery < 2.5f) {
             severity = 0;
             alertTriggered = true;
             triggerSource  = "battery";
             triggerReason  = "BATERIE CRITICA";
         } else if (battery < 4.3f) {
-            severity = 1;
+            severity = 3;
             alertTriggered = true;
             triggerSource  = "battery";
             triggerReason  = "ALIMENTARE PE BATERIE INTERNA";
-        } else if (battery < 6.0f) {
+        } else if (battery < 5.5f) {
             severity = 4;
             alertTriggered = true;
             triggerSource  = "battery";

@@ -28,6 +28,8 @@ typedef struct {
 
 
 uint8_t KEYBOARD_ANY_PRESSED();
+
+uint8_t KEYBOARD_ACTIVE_PULSE();
 uint8_t KEYBOARD_ACTIVE();
 
 // === Initialization ===

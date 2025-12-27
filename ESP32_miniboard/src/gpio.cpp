@@ -128,7 +128,7 @@ int GPIO_DIGITAL_READ(uint8_t pin) {
     selectMuxChannel(ch);
     delay(5);
     int val = analogRead(MUX_INPUT);
-    return (val > 1500) ? HIGH : LOW;
+    return (val > 1000) ? HIGH : LOW;
   }
   else {
     Serial.printf("GPIO_DIGITAL_READ ERROR: unsupported pin %d\n", pin);

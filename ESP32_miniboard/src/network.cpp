@@ -559,6 +559,69 @@ void syncTime() {
 
 
 
+// returns:
+// 0 = pending/not approved
+// 1 = approved, no owner yet
+// 2 = approved + owner
+// 3 = rejected / revoked / expired / invalid
+// 255 = error condition (network/json/etc)
+uint8_t getTagStatus(const String& tag_uid)
+{
+    if (sessionToken == "") {
+        Serial.println("⚠️ No session token. Cannot check status.");
+        return 255;
+    }
+
+    HTTPClient http;
+    http.begin(BASE_URL + "/api/tag/status-request/");
+
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Session-Token", sessionToken);
+
+    // ---- build JSON ----
+    StaticJsonDocument<128> json;
+    json["tag_uid"] = tag_uid;
+
+    String payload;
+    serializeJson(json, payload);
+
+    // ---- POST ----
+    int code = http.POST(payload);
+    String response = http.getString();
+    http.end();
+
+    Serial.println("Tag Status Response: " + response);
+
+    if (code != 200) {
+        Serial.println("❌ HTTP error");
+        return 255;
+    }
+
+    // ---- parse JSON ----
+    StaticJsonDocument<128> resp;
+    DeserializationError err = deserializeJson(resp, response);
+
+    if (err) {
+        Serial.print("❌ JSON parse failed: ");
+        Serial.println(err.f_str());
+        return 255;
+    }
+
+    if (!resp.containsKey("status")) {
+        Serial.println("❌ No 'status' in response");
+        return 255;
+    }
+
+    uint8_t status = resp["status"].as<uint8_t>();
+
+    Serial.print("📥 Tag status = ");
+    Serial.println(status);
+
+    return status;
+}
+
+
+
 
 void registerTAG(const String& tag_uid, const String& notes) {
   if (sessionToken == "") {
@@ -599,6 +662,97 @@ void deleteTAG(const String& tag_uid, const String& reason) {
 }
 
 
+
+
+// returns:
+// 1 -> tag fully approved (status 2)
+// 0 -> rejected, timeout, or error
+uint8_t waitForTagFullyApproved(const String& uid)
+{
+    const unsigned long timeoutMs   = 180000UL; // 3 minutes
+    const unsigned long pollInterval = 3000UL;  // 3 seconds
+    unsigned long start = millis();
+
+    while (millis() - start < timeoutMs)
+    {
+        uint8_t status = getTagStatus(uid);
+
+        OLED_Clear();
+
+        // -------------------------
+        // 0 -> Pending approval
+        // -------------------------
+        if (status == 0)
+        {
+            OLED_DisplayStrictText(
+                "PENDING APPROVAL",
+                "PLEASE APPROVE TAG"
+            );
+        }
+
+        // -------------------------
+        // 1 -> Approved, add owner
+        // -------------------------
+        else if (status == 1)
+        {
+            OLED_DisplayStrictText(
+                "APPROVED",
+                "PLEASE ADD OWNER"
+            );
+        }
+
+        // -------------------------
+        // 2 -> Fully approved
+        // -------------------------
+        else if (status == 2)
+        {
+            OLED_DisplayStrictText(
+                "SUCCESS",
+                "TAG APPROVED"
+            );
+            delay(1200);
+            return 1;   // DONE OK
+        }
+
+        // -------------------------
+        // 3 -> Rejected
+        // -------------------------
+        else if (status == 3)
+        {
+            OLED_DisplayStrictText(
+                "TAG REJECTED",
+                "CONTACT SERVICE"
+            );
+            delay(1500);
+            return 0;
+        }
+
+        // -------------------------
+        // other / network error
+        // -------------------------
+        else
+        {
+            OLED_DisplayStrictText(
+                "STATUS ERROR",
+                "CHECK NETWORK"
+            );
+        }
+
+        delay(pollInterval);
+    }
+
+    // -------------------------
+    // timeout
+    // -------------------------
+    OLED_Clear();
+    OLED_DisplayStrictText(
+        "TIMEOUT",
+        "NO ACTION"
+    );
+    delay(1200);
+
+    return 0;
+}
 
 
 

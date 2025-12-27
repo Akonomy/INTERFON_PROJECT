@@ -579,7 +579,7 @@ def api_tag_get_info(request):
 
     # Check age (max 5 min)
     age_seconds = (dj_tz.now() - tag.created_at).total_seconds()
-    if age_seconds > 5 * 60:
+    if age_seconds > 10 * 60:
         return JsonResponse({"status": "expired"}, status=200)
 
     # Return tag info safely

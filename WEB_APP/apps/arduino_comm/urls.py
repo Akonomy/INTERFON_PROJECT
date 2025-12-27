@@ -68,9 +68,16 @@ urlpatterns = [
 
     path("api/tag/register-request/", tag_views.api_register_tag_request, name="api_register_tag_request"),
     path("api/tag/revoke-request/", tag_views.api_revoke_tag_request, name="api_revoke_tag_request"),
+    path("api/tag/status-request/",tag_views.api_tag_status_request, name="api_tag_status_request"),
 
     path("tags/register-requests/<int:request_id>/approve/", tag_views.approve_tag_register_request, name="approve_tag_register_request"),
     path("tags/register-requests/<int:request_id>/reject/",tag_views.reject_tag_register_request, name="reject_tag_register_request"),
+
+
+    path("tags/register-requests/<int:request_id>/delete-all/",  tag_views.delete_all_register_requests_for_tag,  name="delete_all_register_requests_for_tag"),
+    path("tags/revoke-requests/<int:request_id>/delete-all/", tag_views.delete_all_revoke_requests_for_tag, name="delete_all_revoke_requests_for_tag"),
+
+
 
     # Tag revoke approval/rejection
     path("tags/revoke-requests/<int:request_id>/approve/", tag_views.approve_tag_revoke_request, name="approve_tag_revoke_request"),
