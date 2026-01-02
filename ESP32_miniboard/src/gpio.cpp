@@ -7,8 +7,8 @@
 #define CLOCK_PIN 6
 #define LATCH_PIN 5
 
-#define S0 0
-#define S1 1
+#define S0 1
+#define S1 2
 #define S2 3
 #define MUX_INPUT 4
 
@@ -114,10 +114,10 @@ void GPIO_SET(uint8_t pin, bool state) {
   }
 }
 
-int GPIO_DIGITAL_READ(uint8_t pin) {
+uint8_t  GPIO_DIGITAL_READ(uint8_t pin) {
   if (!GPIO_IS_VALID(pin)) {
     Serial.printf("GPIO_DIGITAL_READ ERROR: invalid or reserved pin %d\n", pin);
-    return LOW;
+    return 255;
   }
 
   if (pin <= 10) {
@@ -126,17 +126,19 @@ int GPIO_DIGITAL_READ(uint8_t pin) {
   else if (pin >= 100 && pin <= 107) {
     uint8_t ch = pin - 100;
     selectMuxChannel(ch);
-    delay(5);
+    delay(1);
     int val = analogRead(MUX_INPUT);
-    return (val > 1000) ? HIGH : LOW;
+
+
+    return (val > 2000) ? 1 : 0;
   }
   else {
     Serial.printf("GPIO_DIGITAL_READ ERROR: unsupported pin %d\n", pin);
-    return LOW;
+    return 255;
   }
 }
 
-int GPIO_READ(uint8_t pin) {
+uint16_t GPIO_READ(uint8_t pin) {
   if (!GPIO_IS_VALID(pin)) {
     Serial.printf("GPIO_READ ERROR: invalid or reserved pin %d\n", pin);
     return 0;
@@ -148,8 +150,13 @@ int GPIO_READ(uint8_t pin) {
   else if (pin >= 100 && pin <= 107) {
     uint8_t ch = pin - 100;
     selectMuxChannel(ch);
-    delay(5);
-    return analogRead(MUX_INPUT);
+    delay(2);  //leave signal to settle
+    uint16_t val =analogRead(MUX_INPUT);
+    //if (val>0){Serial.print(pin); Serial.print("pn-val"); Serial.print(val);Serial.print("||");}
+
+
+
+    return val;
   }
   else {
     Serial.printf("GPIO_READ ERROR: unsupported pin %d\n", pin);
@@ -161,7 +168,7 @@ int GPIO_READ(uint8_t pin) {
 
 float GPIO_CHECK_STATUS_AND_BATTERY() {
   // Step 1: Activate tamper check
-  GPIO_SET(TAMPER_C, true);
+  GPIO_SET(TAMPER_C, false);
 
   // Wait 2ms (unfortunately, precision rituals need time)
   delay(2);
@@ -231,22 +238,21 @@ void GPIO_CHECK_BATTERY(float* battery, uint8_t* tamper) {
 
 
 uint8_t GPIO_CHECK_TAMPER_FAST() {
-  // Enable tamper circuit
-  GPIO_SET(TAMPER_C, true);
+  // Enable tamper circuit (active LOW now)
+  GPIO_SET(TAMPER_C, false);
 
-  // Check HIGH side FIRST (wire cut = LOW)
-  int tamperH = GPIO_DIGITAL_READ(TAMPER_H);
-  if (tamperH != HIGH) {
-    return 1; // compromised immediately
-  }
-
-  // Then check LOW side
+  // Check LOW side FIRST (this is actively driven)
   int tamperL = GPIO_DIGITAL_READ(TAMPER_L);
   if (tamperL != LOW) {
     return 1; // compromised
   }
 
+  // Then check HIGH side (passive pull-up)
+  int tamperH = GPIO_DIGITAL_READ(TAMPER_H);
+  if (tamperH != HIGH) {
+    return 1; // compromised
+  }
+
   return 0; // tamper OK
 }
-
 

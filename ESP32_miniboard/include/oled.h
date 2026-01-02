@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
+#include "log.h"
 // ===========================
 // OLED CONFIGURATION
 // ===========================
@@ -32,7 +32,7 @@ void OLED_Init();
 void OLED_Clear();
 
 // Displays a number centered or at default position
-void OLED_DisplayNumber(uint8_t number);
+void OLED_DisplayNumber(uint32_t number, uint8_t size= 3);
 
 // Displays arbitrary text at default position
 void OLED_DisplayText(const String &text, uint8_t size = 2);

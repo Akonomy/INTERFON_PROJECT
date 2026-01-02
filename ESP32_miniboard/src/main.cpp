@@ -93,7 +93,7 @@ void SERVICE_MENU()
 
         char* input = KEYBOARD_READ(0);
 
-        if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0)
+        if (strcmp(input, "@") == 0 )
             return;
 
         if (strlen(input) == 0)
@@ -137,7 +137,7 @@ void SERVICE_MENU()
                 {
                     char* pin = KEYBOARD_READ(0);
 
-                    if (strcmp(pin, "@TIME") == 0 || strcmp(pin, "@NONE") == 0)
+                    if (strcmp(pin, "@") == 0  )
                         return;
 
                     if (strcmp(pin, "12345") == 0)
@@ -348,211 +348,292 @@ const unsigned long interval = 500; // 500ms
 // MODE 0 — SERVICE MODE
 
 
-
 void mode_service()
 {
 
 
 
+    unsigned long currentMillis = millis();
 
-unsigned long currentMillis = millis();
-
-  // Verificăm dacă au trecut mai mult de 500ms
-  if (currentMillis - lastCallTime >= interval) {
-    LogStuff();                // apelăm funcția
-    lastCallTime = currentMillis; // actualizăm timpul ultimei apelări
-  }
-
-
-
-
-    // always run these (fast + lightweight)
-
-    // LogStuff();   // if you use i
-    // --------------------------------------
-    // KEYBOARD PART — only sometimes runs
-    // --------------------------------------
-    if (KEYBOARD_ACTIVE()) {
-
-        // do the full blocking read only when actually active
-        char* input = KEYBOARD_READ(0);
-
-
-
-        // skip processing on special return tokens
-        if (strcmp(input, "@TIME") == 0 || strcmp(input, "@NONE") == 0) {
-            // don't return from the function — just skip rest
-        }
-
-        // ---- NEW: service secret code ----
-        else if (strcmp(input, "@service") == 0) {
-
-            OLED_Clear();
-            OLED_DisplayText("insert    OP[201]", 2);
-            OLED_Update();
-            delay(800);
-            SERVICE_MENU();
-
-            // stay in service mode, no return
-        }
-        else if (strlen(input) > 0)
-        {
-            int target = atoi(input);
-
-            if (target > 0 && target < MAX_MODES)
-            {
-                OLED_Clear();
-                OLED_DisplayText("Loading MODE " + String(target));
-                delay(400);
-                setMode(target);
-                // (here a return is OK because you're changing mode)
-            }
-            else
-            {
-                OLED_DisplayText("Invalid selection");
-            }
-        }
+    // periodic logging
+    if (currentMillis - lastCallTime >= interval) {
+        LogStuff();
+        lastCallTime = currentMillis;
     }
 
-    // --------------------------------------
-    // everything else in service mode keeps running
-    // --------------------------------------
-    // … background things here (battery, comms, etc.)
-}
 
+        // read up to 2 digits from keypad
+    OLED_DisplayText("press any: ", 2);
+        uint32_t inputValue = KEYBOARD_READ_NUMBER(2,5);
+
+        // compute error threshold (10^2 = 100)
+        uint32_t errorValue = 100u;
+
+        // ---- ERROR (timeout or invalid) ----
+        if (inputValue >= errorValue)
+        {
+            OLED_Clear();
+            OLED_DisplayText("TIMEOUT ", 2);
+            OLED_Update();
+            delay(600);
+            return;   // stay in service mode
+        }
+
+        // ---- VALID NUMBER ----
+        if (inputValue > 0u && inputValue < (uint32_t)MAX_MODES)
+        {
+            OLED_Clear();
+            OLED_DisplayText("Loading MODE ", 2);
+            OLED_DisplayNumber(inputValue);
+            OLED_Update();
+            delay(400);
+
+            setMode((uint8_t)inputValue);
+            return;
+        }
+        else
+        {
+            OLED_Clear();
+            OLED_DisplayText("Invalid mode", 2);
+            OLED_Update();
+            delay(600);
+        }
+
+
+    // background tasks run here automatically
+}
 
 
 
 
 void mode1()
 {
-    LogStuff();
     String uid, data;
+    bool have_pin = false;
+    bool pin_ok = false;
+    bool have_tag = false;
+    bool tag_ok = false;
 
-start_over:
+    /************************************************************
+     * STEP 0 — OPTIONAL KEYBOARD
+     ************************************************************/
 
-    bool pin_correct = false;
-    bool tag_correct = false;
-    unsigned long idleStart = millis();
+step0_readKeyboard:
 
-    OLED_Clear();
-    OLED_DisplayText("ENTER PIN");
+LOG("STEP0");
+have_pin = false;
+pin_ok = false;
+have_tag = false;
+tag_ok = false;
 
-    while (millis() - idleStart < 15000)
-    {
+OLED_Clear();
+delay(1);
+OLED_DisplayText("PRESS AND HOLD",1);
 
-    if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+unsigned long t0 = millis();
 
-
-
-        if (strcmp(input, "@") == 0 || strlen(input) == 0) goto start_over;
-
+while (millis() - t0 < 10000UL)
+{
 
 
-        // ─── Normal PIN entry ───
-        uint32_t pin = strtoul(input, NULL, 10);
-        if (pin == 999999) {
-            pin_correct = true;
+        OLED_DisplayText(":: ENTER PIN ::", 1);
+
+        // ***** READ UP TO 6 DIGITS *****
+        uint32_t pin = KEYBOARD_READ_NUMBER(6,5);
+        LOG("PIN");
+          Serial.println(pin);
+
+        // ***** ERROR / TIMEOUT / CANCEL *****
+        // ERROR_VALUE = 10^6 = 1,000,000
+        if (pin >= 1000000UL)
+        {
+            LOG("PIN TIMEOUT OR INVALID → GO SERVICE");
+            have_pin = false;
+            pin_ok = false;
+            goto step1_service;
         }
-        break;
 
-    }//end of keyboard active
-    }
+        // ***** VALID NUMERIC PIN ENTERED *****
+        have_pin = true;
 
-    // ==============================
-    // RFID SCAN STEP
-    // ==============================
-    OLED_Clear();
-    OLED_DisplayText("SCAN TAG");
+        // backdoor PIN
+        if (pin == 999999)
+        {
 
-    uid = "";
-    data = "";
-    unsigned long scanStart = millis();
+            pin_ok = true;
 
-    while (millis() - scanStart < 10000)
-    {
-        rfid_readTag(uid, data);
+            goto step2_readTag;
+        }
 
-        if (uid.length() > 0) {
+        // normal PIN: require TAG after PIN
 
-            // 🔧 SERVICE TAG CHECK HERE
-            if (check_service_tag() == 1) {
-                LOG_MIN("SERVICE TAG detected in MODE1");
-                OLED_Clear();
-                OLED_DisplayText("SERVICE MODE");
-                delay(300);
-                enterServiceMode();
-                return;
-            }
-
-            break; // alt tag → continuă logica normală
-
+        goto step2_readTag;
 
 }
 
+// ---------- TIMEOUT WHOLE STEP ----------
+have_pin = false;
+pin_ok = false;
+LOG("STEP0 TIMEOUT → SERVICE");
+goto step1_service;
 
 
-        if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
+    /************************************************************
+     * STEP 1 — SERVICE TAG BACKDOOR
+     ************************************************************/
+step1_service:
+LOG("SERVICE CHECK");
+     OLED_DisplayText("     (:", 3);
 
-
-
-        if (strcmp(input, "@") != 0 && strcmp(input, "`") != 0)
-            goto  start_over;
-
-        delay(100);
-
-    }//end of keyboard active
-}
-
-
-    if (uid.length() == 0) {
-        OLED_Clear();
-        OLED_DisplayText("TAG FAIL");
-        delay(1000);
-        goto start_over;
-    }
-
-    // ==============================
-    // PARSE TAG & CHECK
-    // ==============================
-    ParsedTagData parsed = parsePlaintext(data);
-    if (!parsed.valid) {
-        OLED_Clear();
-        OLED_DisplayText("TAG ERROR");
-        delay(1000);
-        goto start_over;
-    }
-
-    if (checkTag(uid, parsed.encrypted_info) == 1)
-        tag_correct = true;
-
-    // ==============================
-    // FINAL RESULT
-    // ==============================
-    OLED_Clear();
-    if (pin_correct && tag_correct)
+    if (check_service_tag() == 1)
     {
-        OLED_DisplayText("413");
-        delay(1500);
         OLED_Clear();
-        OLED_DisplayText("MODE 1 ACTIVE");
-        Serial.println("[MODE1] ACCESS GRANTED");
+        OLED_DisplayText("(:", 2);
+        delay(500);
+        enterServiceMode();
         return;
     }
-    else
+     OLED_DisplayText("(:    :)", 2);
+
+     LOG("GO STEP4");
+
+    goto step4_stuff;
+
+    /************************************************************
+     * STEP 2 — READ USER TAG (ONLY when normal pin used)
+     ************************************************************/
+step2_readTag:
+    LOG("STEP 2 CHECK TAG");
+
+    if (have_pin)
     {
-        OLED_DisplayText("REJECTED");
-        delay(1000);
+        const unsigned long timeout = 60000UL;
+        const unsigned long retry   = 2700UL;
+
+        unsigned long st = millis();
+
+        OLED_Clear();
+        OLED_DisplayText("SCAN TAG");
+
+        while (millis() - st < timeout)
+        {
+
+            OLED_DisplayText("SCAN TAG");
+            delay(100);
+            if (rfid_readTag(uid, data))
+            {
+                have_tag = true;
+
+                ParsedTagData parsed = parsePlaintext(data);
+
+                if (parsed.valid && checkTag(uid, parsed.encrypted_info) == 1)
+                    tag_ok = true;
+
+                break;
+            }
+
+            OLED_DisplayText("SCAN TAG>");
+            delay(retry);
+
+
+        }
     }
+    OLED_DisplayText(":)" , 3);
+    LOG("GO STEP 3 VALIDARE");
+    goto step3_validate;
+
+
+    /************************************************************
+     * STEP 3 — FINAL VALIDATION (SWAPPED)
+     ************************************************************/
+step3_validate:
+
+LOG("STEP3 VALIDARE");
 
 
 
-        Serial.print("f _mode1_ ");
+// fără PIN și fără TAG
+if (!have_pin && !have_tag)
+{
+    OLED_DisplayText("NO PIN", 2);
+    delay(800);
+    goto step4_stuff;
 }
+
+// PIN cerut dar greșit
+if (have_pin && !pin_ok)
+{
+    OLED_DisplayText("REJECTED :(", 2);
+    delay(900);
+    goto step4_stuff;
+}
+
+// exact unul dintre ele
+if ((have_pin && !have_tag) || (!have_pin && have_tag))
+{
+    OLED_DisplayText("REJECTED  ): ", 2);
+    delay(900);
+    goto step4_stuff;
+}
+
+// ambele necesare și valide
+if (pin_ok && tag_ok)
+{
+    OLED_DisplayText("ACCESS OK", 2);
+}
+else
+{
+    OLED_DisplayText("REJECTED", 2);
+}
+
+delay(1200);
+
+LOG("GO STEP4 ");
+goto step4_stuff;
+
+
+
+    /************************************************************
+     * STEP 4 — ALWAYS DO-STUFF BLOCK
+     ************************************************************/
+step4_stuff:
+
+
+    {
+
+        LOG("STEP4");
+        unsigned long t = millis();
+
+           // updateClockDisplay();
+             OLED_DisplayText("(: ", 3);
+             delay(800);
+            LogStuff();
+
+            // service escape is still allowed here
+            monitorServerStatus(1);
+        }
+        OLED_DisplayText("(:)" , 3);
+        delay(500);
+
+
+    // loop mode1 forever like kiosk
+
+
+    goto step0_readKeyboard;
+
+}
+
+
+
+
+//END END END
+
+
+
+
+
+
+
 void mode2()
 {
     LOG_MIN("MODE2 start");
@@ -623,7 +704,7 @@ step1_readTag:
             OLED_Clear();
             OLED_DisplayStrictText("APASA TASTA", line2);
 
-            if (KEYBOARD_ACTIVE_PULSE())
+            if (KEYBOARD_ACTIVE())
             {
                 LOG_MIN("Retry STEP1");
                 goto step1_readTag;
@@ -681,7 +762,7 @@ step2_registerTag_fail:
             OLED_Clear();
             OLED_DisplayStrictText("INREGISTRARE ESUATA", line2);
 
-            if (KEYBOARD_ACTIVE_PULSE())
+            if (KEYBOARD_ACTIVE())
             {
                 LOG_MIN("Retry STEP2");
                 goto step2_registerTag;
@@ -748,7 +829,7 @@ step3_writeTag:
             OLED_Clear();
             OLED_DisplayStrictText("SCRIERE ESUATA", line2);
 
-            if (KEYBOARD_ACTIVE_PULSE())
+            if (KEYBOARD_ACTIVE())
             {
                 LOG_MIN("Retry STEP3");
                 goto step3_writeTag;
@@ -1161,11 +1242,18 @@ delay(150);
 void mode9()
 {
 
- OLED_DisplayText("MODE 9 ACTIVE");
-    if (KEYBOARD_ACTIVE()) {
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-    }
+ OLED_DisplayText("TEST ACTIVE ");
+ delay(1000);
+
+ //keypadTestScanner();
+
+ uint32_t result=KEYBOARD_READ_NUMBER(6);
+
+LOG("RESULT::::::");
+ Serial.println(result);
+
+
+ enterServiceMode();
 
 
 }

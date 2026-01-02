@@ -27,38 +27,60 @@ void rfid_init(void)
     Serial.println((ver >> 16) & 0xFFFF, HEX);
 
     rfid_nfc.SAMConfig();
+
+
     Serial.println("🔹 RFID initializat.");
 }
 
 // ================== DETECT ==================
 bool rfid_detect(void)
 {
-    if (!rfid_nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A,
-                                      rfid_tag.uid,
-                                      &rfid_tag.uid_len))
-        return false;
+    const unsigned long DETECT_TIMEOUT_MS = 5000;   // 5 seconds
+    const uint16_t SINGLE_TRY_TIMEOUT_MS = 100;     // 100 ms per try
 
-    uint16_t atqa = ((uint16_t)pn532_packetbuffer[9] << 8) | pn532_packetbuffer[10];
-    uint8_t  sak  = pn532_packetbuffer[11];
+    unsigned long t0 = millis();
 
-    rfid_tag.atqa = atqa;
-    rfid_tag.sak  = sak;
+    while (millis() - t0 < DETECT_TIMEOUT_MS)
+    {
+        // try once with short timeout
+        if (rfid_nfc.readPassiveTargetID(
+                PN532_MIFARE_ISO14443A,
+                rfid_tag.uid,
+                &rfid_tag.uid_len,
+                SINGLE_TRY_TIMEOUT_MS))
+        {
+            // found a card → classify and return
+            uint16_t atqa = ((uint16_t)pn532_packetbuffer[9] << 8) | pn532_packetbuffer[10];
+            uint8_t  sak  = pn532_packetbuffer[11];
 
-    if (sak == 0x08) {
-        rfid_tag.type = RFID_TYPE_MIFARE_1K;
-    }
-    else if (sak == 0x00 && rfid_tag.uid_len == 7) {
-        rfid_tag.type = RFID_TYPE_NTAG_21x;
-    }
-    else if (sak == 0x00) {
-        rfid_tag.type = RFID_TYPE_ULTRALIGHT;
-    }
-    else {
-        rfid_tag.type = RFID_TYPE_UNKNOWN;
+            rfid_tag.atqa = atqa;
+            rfid_tag.sak  = sak;
+
+            if (sak == 0x08) {
+                rfid_tag.type = RFID_TYPE_MIFARE_1K;
+            }
+            else if (sak == 0x00 && rfid_tag.uid_len == 7) {
+                rfid_tag.type = RFID_TYPE_NTAG_21x;
+            }
+            else if (sak == 0x00) {
+                rfid_tag.type = RFID_TYPE_ULTRALIGHT;
+            }
+            else {
+                rfid_tag.type = RFID_TYPE_UNKNOWN;
+            }
+
+            return true;   // tag detected
+        }
+
+        // small pause so CPU isn’t 100% busy
+        delay(5);
     }
 
-    return true;
+    // timeout expired → no card
+    return false;
 }
+
+
 
 // mic helper intern: UID → string hex
 static String rfid_uidToString()
@@ -439,7 +461,10 @@ String decryptData(const uint8_t* cipher, int len, const String& serverKey)
 // citește tag-ul (MIFARE/NTAG), întoarce UID hex + data RAW convertită la string
 bool rfid_readTag(String &uidHex, String &decoded)
 {
+    // No tag detected
     if (!rfid_detect()) {
+        uidHex = "-1";
+        decoded = "-1err";
         return false;
     }
 
@@ -453,23 +478,32 @@ bool rfid_readTag(String &uidHex, String &decoded)
 
     if (rfid_tag.type == RFID_TYPE_MIFARE_1K) {
         ok = mifare_readRaw(buf, RFID_MAX_DATA, len);
-        Serial.println("MIFARE.");
+        LOG("READ MIFARE");
     }
     else if (rfid_tag.type == RFID_TYPE_NTAG_21x ||
              rfid_tag.type == RFID_TYPE_ULTRALIGHT) {
         ok = ntag_readRaw(buf, RFID_MAX_DATA, len);
-        Serial.println("NTAG.");
-    } else {
+        LOG("READ NTAG");
+    }
+    else {
+        // unknown tag type
+        uidHex = "-1";
+        decoded = "-1err";
         Serial.println("⚠️ Tip tag necunoscut → nu se poate citi RAW.");
         return false;
     }
 
-    if (!ok) return false;
+    // read failed
+    if (!ok) {
+        uidHex = "-1";
+        decoded = "-1err";
+        return false;
+    }
 
     // --- determinăm cheia ---
     String key((const char*)DEVICE_HALF_KEY, 16);
-
-    if (key.length() == 0) key = String((char*)DEFAULT_FALLBACK_KEY, 16);
+    if (key.length() == 0)
+        key = String((char*)DEFAULT_FALLBACK_KEY, 16);
 
     // --- DECRIPTARE automată ---
     String decrypted = decryptData(buf, len, key);
@@ -610,10 +644,12 @@ uint8_t register_service_tag()
 
 uint8_t check_service_tag()
 {
+
     String uid, decoded;
 
     // citire (decriptează automat)
     if (!rfid_readTag(uid, decoded)) {
+         LOG("SERVICE TAG CALLED");
         return 0;
     }
 

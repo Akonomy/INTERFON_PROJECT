@@ -27,10 +27,11 @@ typedef struct {
 #define KEY_HOLD_TIMEOUT 456  // ms
 
 
-uint8_t KEYBOARD_ANY_PRESSED();
 
-uint8_t KEYBOARD_ACTIVE_PULSE();
-uint8_t KEYBOARD_ACTIVE();
+uint32_t KEYBOARD_READ_NUMBER(uint8_t maxDigits=9, uint8_t time_scan=5  );
+
+
+
 
 // === Initialization ===
 void KEYBOARD_INIT(); // Call once during setup
@@ -40,9 +41,7 @@ void KEYBOARD_INIT(); // Call once during setup
 KeyEvent KEYBOARD_READ_KEY(uint8_t mode=0);
 
 
-// === Multi-Digit Input ===
-// Read digits until '#' or maxDigits reached
-int KEYBOARD_READ_NUMBER(int maxDigits);
+
 
 // Get current input buffer (copy into your own buffer)
 void KEYBOARD_GET_INPUT(char* buffer, int maxLen);
@@ -59,8 +58,17 @@ char KEYBOARD_READ_CHAR();
 void KEYBOARD_READ_STRING(char* buffer, int maxLen, bool stopOnEnter);
 
 
-char* KEYBOARD_READ(uint8_t mode);
+char* KEYBOARD_READ(uint8_t mode=0,uint8_t special_key=0);
 
 
-char KEYBOARD_READ_CONTROL();
+char KEYBOARD_READ_CONTROL(uint8_t timeoutSeconds=5);
+
+
+
+uint8_t TESTkeypadScan(void);
+
+
+
+bool KEYBOARD_ACTIVE(uint8_t seconds=10);
+
 #endif // KEYBOARD_H

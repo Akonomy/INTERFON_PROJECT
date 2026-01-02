@@ -5,7 +5,7 @@
 
 #include <Crypto.h>
 #include <SHA256.h>
-
+#include "log.h"
 
 // === PINI PN532 I2C (tu deja le ai) ===
 #define RFID_SDA_PIN   8

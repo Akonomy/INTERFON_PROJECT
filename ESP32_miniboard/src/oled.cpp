@@ -40,9 +40,11 @@ void OLED_Clear() {
 // ===========================
 // Display number
 // ===========================
-void OLED_DisplayNumber(uint8_t number) {
+void OLED_DisplayNumber(uint32_t number, uint8_t size) {
+    LOG("OLED_NUMBER_DYSPLAY");
+    Serial.println(number);
   display.clearDisplay();
-  display.setTextSize(DEFAULT_TEXT_SIZE);
+   display.setTextSize(size);   // folosește dimensiunea cerută
   display.setCursor(DEFAULT_TEXT_X, DEFAULT_TEXT_Y);
   display.print(number);
   display.display();
