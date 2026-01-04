@@ -27,13 +27,13 @@
 #define COL_1      100
 #define COL_3      101
 #define COL_5      102
-#define TAMPER_H   103
-#define TAMPER_L   104
+#define TAMPER_H   104
+#define TAMPER_L   103
 
 
 
 
-#define BATTERY_P  0
+
 
 
 #define SDA_PIN 8

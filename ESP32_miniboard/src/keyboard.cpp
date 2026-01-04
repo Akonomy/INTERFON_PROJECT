@@ -73,9 +73,9 @@ static uint32_t pow10u(uint8_t n)
 
 
 
-#define NO_KEY            255u
-#define COL_THRESHOLD    100u
-#define KEY_TIMEOUT_MS   256u
+#define NO_KEY            255u // eroare fara tasta
+#define COL_THRESHOLD    100u //nu modifica aici e nivelul care se considera tasta activa
+#define KEY_TIMEOUT_MS   296u  //timp dupa care se returneaza automat chiar daca tasta e inca apasata
 
 #define POS_LONG_PRESS   0x80
 #define POS_ROW_MASK     0x0C
@@ -85,14 +85,42 @@ static uint32_t pow10u(uint8_t n)
 #define POS_GET_ROW(pos)     (((pos) >> 2) & 0x03)
 #define POS_GET_COL(pos)     ((pos) & 0x03)
 
-uint8_t keypadScanPos(uint8_t scanSeconds = 5, uint8_t needLongPress = 0)
+
+#define POS_FLAG_SHORT   0x20  // bit 5
+#define POS_FLAG_NORMAL  0x40  // bit 6
+#define POS_FLAG_LONG    0x80  // bit 7
+
+
+
+// Extract raw row/col position (lower bits)
+#define POS_GET_POS(p)    ((p) & 0x0F)
+
+// Extract keypad key number (using KEYPAD_NUM table)
+#define POS_GET_KEY(p) \
+    (KEYPAD_NUM[POS_GET_ROW(POS_GET_POS(p))][POS_GET_COL(POS_GET_POS(p))])
+
+// Extract press type flags
+#define POS_GET_FLAG(p)  ((p) & (POS_FLAG_SHORT | POS_FLAG_NORMAL | POS_FLAG_LONG))
+
+
+
+
+#define POS_IS_SHORT(p)   ((p) & POS_FLAG_SHORT)
+#define POS_IS_NORMAL(p)  ((p) & POS_FLAG_NORMAL)
+#define POS_IS_LONG(p)    ((p) & POS_FLAG_LONG)
+
+uint8_t keypadScanPos(
+    uint8_t scanSeconds = 5,
+    uint8_t needLongPress = 0,
+    uint8_t needFastReturn = 0
+)
 {
     unsigned long scanStart = millis();
     unsigned long scanTimeout = (unsigned long)scanSeconds * 1000UL;
 
     const unsigned long autoReturnMs = needLongPress ? 1000UL : 256UL;
+    unsigned long noKeyStart = 0;
 
-    // ---- idle: rows LOW for fast column detect ----
     for (uint8_t r = 0; r < 4; r++)
         GPIO_SET(ROW_PINS[r], LOW);
 
@@ -113,8 +141,21 @@ uint8_t keypadScanPos(uint8_t scanSeconds = 5, uint8_t needLongPress = 0)
             delay(3);
         }
 
+        // -------- no activity --------
         if (colHit < 0)
+        {
+            if (needFastReturn)
+            {
+                if (noKeyStart == 0)
+                    noKeyStart = millis();
+                else if (millis() - noKeyStart >= 200)
+                    return ERR_KEYPAD_TIMEOUT; // fast exit
+            }
             continue;
+        }
+
+        // activity detected → reset idle timer
+        noKeyStart = 0;
 
         // -------- resolve row --------
         int8_t rowHit = -1;
@@ -134,7 +175,6 @@ uint8_t keypadScanPos(uint8_t scanSeconds = 5, uint8_t needLongPress = 0)
             }
         }
 
-        // restore rows LOW
         for (uint8_t r = 0; r < 4; r++)
             GPIO_SET(ROW_PINS[r], LOW);
 
@@ -149,22 +189,30 @@ uint8_t keypadScanPos(uint8_t scanSeconds = 5, uint8_t needLongPress = 0)
         {
             if (GPIO_READ(COL_PINS[colHit]) >= COL_THRESHOLD)
             {
-                // released early → NOT long press
-                return pos;
+                unsigned long dt = millis() - pressStart;
+
+                if (!needLongPress)
+                {
+                    if (dt < 110)  //timp de apasare tasta pt a fi considerata short press
+                        return pos | POS_FLAG_SHORT;
+                    else
+                        return pos | POS_FLAG_NORMAL;
+                }
+
+                return pos | POS_FLAG_NORMAL;
             }
             delay(5);
         }
 
-        // auto-return → LONG PRESS
-        return pos | POS_LONG_PRESS;
+        return pos | POS_FLAG_LONG;
     }
 
-    // ---- global timeout ----
     for (uint8_t r = 0; r < 4; r++)
         GPIO_SET(ROW_PINS[r], HIGH);
 
     return ERR_KEYPAD_TIMEOUT;
 }
+
 
 
 
@@ -309,200 +357,348 @@ uint32_t KEYBOARD_READ_NUMBER(uint8_t maxDigits,uint8_t time_scan)
 }
 
 
-uint8_t TESTkeypadScan(void)
-{
-    unsigned long startTime = millis();
+void TESTkeypadScan(void)
 
-    // --- Force all rows LOW ---
+{
+    unsigned long testStart = millis();
+
+    Serial.println("=== KEY PRESS DURATION TEST (10s) ===");
+
+    // rows LOW for fast detection
     for (uint8_t r = 0; r < 4; r++)
         GPIO_SET(ROW_PINS[r], LOW);
 
-    delay(1); // settle
+    delay(1);
 
-    while ((millis() - startTime) < 5000)
+    while ((millis() - testStart) < 100000UL)
     {
-        int8_t activeCol = -1;
+        int8_t colHit = -1;
 
-        // -------- Column scan --------
+        // -------- column scan --------
         for (uint8_t col = 0; col < 3; col++)
         {
-            uint16_t v = GPIO_READ(COL_PINS[col]);
-
-            if (v < 100)
+            if (GPIO_READ(COL_PINS[col]) < COL_THRESHOLD)
             {
-                activeCol = col;
-                Serial.print("COL ");
-                Serial.print(col);
-                Serial.println(" ACTIVE");
-                break;  // stop immediately
+                colHit = col;
+                break;
             }
-
-            delay(3); // column scan pacing
+            delay(1);
         }
 
-        if (activeCol < 0)
+        if (colHit < 0)
             continue;
 
-        // -------- Row scan for active column --------
-        int8_t activeRow = -1;
+        // -------- resolve row --------
+        int8_t rowHit = -1;
 
         for (uint8_t row = 0; row < 4; row++)
         {
-            // isolate row
             for (uint8_t r = 0; r < 4; r++)
                 GPIO_SET(ROW_PINS[r], HIGH);
 
             GPIO_SET(ROW_PINS[row], LOW);
-            delay(3);  // row scan pacing
+            delay(1);
 
-            uint16_t v = GPIO_READ(COL_PINS[activeCol]);
-
-            if (v < 100)
+            if (GPIO_READ(COL_PINS[colHit]) < COL_THRESHOLD)
             {
-                activeRow = row;
-                Serial.print("ROW ");
-                Serial.print(row);
-                Serial.println(" ACTIVE");
+                rowHit = row;
                 break;
             }
         }
 
-        // restore all rows LOW
+        // restore rows LOW
         for (uint8_t r = 0; r < 4; r++)
             GPIO_SET(ROW_PINS[r], LOW);
 
-        Serial.println("----------------------");
-        delay(100); // debounce / human pacing
+        if (rowHit < 0)
+            continue;
+
+        uint8_t pos = POS_MAKE(rowHit, colHit);
+        unsigned long pressStart = millis();
+
+        // -------- wait for release --------
+        while (GPIO_READ(COL_PINS[colHit]) < COL_THRESHOLD)
+        {
+            delay(1);
+        }
+
+        unsigned long duration = millis() - pressStart;
+
+        Serial.print("POS row=");
+        Serial.print(POS_GET_ROW(pos));
+        Serial.print(" col=");
+        Serial.print(POS_GET_COL(pos));
+        Serial.print("  duration=");
+        Serial.print(duration);
+        Serial.println(" ms");
+
+        // small debounce so one press prints once
+        delay(200);
     }
 
-    // --- Exit: disable rows (no current draw) ---
+    // cleanup
     for (uint8_t r = 0; r < 4; r++)
         GPIO_SET(ROW_PINS[r], HIGH);
 
-    return 0;
+    Serial.println("=== TEST END ===");
 }
 
 
-char KEYBOARD_READ_CHAR(void)
+// ================================
+//  MULTITAP KEYBOARD MODULE
+// ================================
+
+// -------- config --------
+#define MAX_CHARS       42
+#define MAX_STRING_LEN  43     // 42 chars + null
+#define KB_IDLE_TIMEOUT 15000  // 15 seconds in ms
+
+// -------- table mode --------
+typedef enum {
+    TABLE_LOWER = 0,
+    TABLE_UPPER = 1
+} KeyTable;
+
+// -------- lookup table --------
+static const char LUT[2][10][6] = {
+    {   // LOWER
+        " 0>", ".!?-1", "abc2", "def3", "ghi4",
+        "jkl5", "mno6", "pqrs7", "tuv8", "wxyz9"
+    },
+    {   // UPPER
+        " 0<", ".!?-1", "ABC2", "DEF3", "GHI4",
+        "JKL5", "MNO6", "PQRS7", "TUV8", "WXYZ9"
+    }
+};
+
+// -------- packing & unpacking --------
+#define MAKE_KEYSTATE(key, state)   (((key & 0x0F) << 3) | (state & 0x07))
+#define KEY_FROM_KEYSTATE(v)        (((v) >> 3) & 0x0F)
+#define STATE_FROM_KEYSTATE(v)      ((v) & 0x07)
+
+// -------- globals --------
+volatile KeyTable g_activeTable = TABLE_LOWER;
+static uint8_t ksBuffer[MAX_CHARS];
+static uint8_t ksLen = 0;
+
+// ================================
+// helper: get max multitab states
+// ================================
+static uint8_t keyMaxState(uint8_t key)
 {
-    static const char* multiCharMap[10] = {
-        " 0>",       // 0 => space, 0, shift toggle
-        ".!?-1",
-        "abc2",
-        "def3",
-        "ghi4",
-        "jkl5",
-        "mno6",
-        "pqrs7",
-        "tuv8",
-        "wxyz9"
-    };
+    if (key == 10) return 0;    // *
+    if (key == 11) return 7;    // #
 
-    static bool uppercase = false;
-    static uint8_t lastDigit = 255;
-    static uint8_t charIndex = 0;
-    static unsigned long lastPressTime = 0;
+    if (key == 0) return 2;     // 3 states
+    if (key == 1 || key == 7 || key == 9)
+        return 5;               // 5 states
 
-    while (1)
+    return 3;                   // default 4 states
+}
+
+// ================================
+// helper: LUT + mode switch (< >)
+// ================================
+char LUT_GetCharWithModeSwitch(uint8_t key, uint8_t state)
+{
+    char ch = LUT[g_activeTable][key][state];
+
+    if (key == 0)
     {
-        // wait forever, long-press enabled
-        uint8_t pos = keypadScanPos(0, 1);
-        if (pos == ERR_KEYPAD_TIMEOUT)
-            continue;
-
-        bool longPress = (pos & POS_LONG_PRESS) != 0;
-        uint8_t row = POS_GET_ROW(pos);
-        uint8_t col = POS_GET_COL(pos);
-        uint8_t key = KEYPAD_NUM[row][col];
-
-        // ----- special keys -----
-        if (key == 11) return '#';   // ENTER
-        if (key == 10) return '*';   // BACK / MODE
-
-        // numeric only
-        if (key > 9)
-            continue;
-
-        // ----- long press → numeric -----
-        if (longPress)
-        {
-            return (char)('0' + key);
-        }
-
-        // ----- multi-tap (short press) -----
-        unsigned long now = millis();
-
-        if (key == lastDigit && (now - lastPressTime) < 400)
-        {
-            charIndex++;
-            uint8_t len = strlen(multiCharMap[key]);
-            if (charIndex >= len)
-                charIndex = len - 1;
-        }
-        else
-        {
-            lastDigit = key;
-            charIndex = 0;
-        }
-
-        lastPressTime = now;
-
-        char result = multiCharMap[key][charIndex];
-
-        // ----- shift toggle -----
-        if (result == '>')
-        {
-            uppercase = !uppercase;
-            OLED_Clear();
-            OLED_DisplayText(uppercase ? "ABC MODE" : "abc mode", 2);
-            delay(600);
-            OLED_Clear();
-            return '\0';
-        }
-
-        if (uppercase && isalpha(result))
-            result = toupper(result);
-
-        return result;
+        if (ch == '>')
+            g_activeTable = TABLE_UPPER;
+        else if (ch == '<')
+            g_activeTable = TABLE_LOWER;
     }
+
+    return ch;
 }
 
+// ================================
+// MULTITAP on a single keypress
+// ================================
+uint8_t keypadMultiTap(uint8_t pos)
+{
+    uint8_t state = 0;
 
+    uint8_t res = keypadScanPos(5, 0, 0);
+    if (res == ERR_KEYPAD_TIMEOUT)
+        return ERR_KEYPAD_TIMEOUT;
 
+    uint8_t key       = POS_GET_KEY(res);
+    uint8_t pressType = POS_GET_FLAG(res);
+    uint8_t maxState  = keyMaxState(key);
 
+    // fixed keys
+    if (key == 10) return MAKE_KEYSTATE(10, 0); // delete
+    if (key == 11) return MAKE_KEYSTATE(11, 7); // enter
 
-void KEYBOARD_GET_INPUT(char* buffer, int maxLen) {
-    strncpy(buffer, inputBuffer, maxLen);
-    buffer[maxLen - 1] = '\0';
-}
+    // long press → last state
+    if (pressType == POS_FLAG_LONG)
+        return MAKE_KEYSTATE(key, maxState);
 
-void KEYBOARD_CLEAR_BUFFER() {
-    memset(inputBuffer, 0, sizeof(inputBuffer));
-    inputIndex = 0;
-}
+    // normal press → state 0
+    if (pressType == POS_FLAG_NORMAL)
+        return MAKE_KEYSTATE(key, 0);
 
-void KEYBOARD_READ_STRING(char* buffer, int maxLen, bool stopOnEnter) {
-    memset(buffer, 0, maxLen);
-    int index = 0;
+    // short press → cycle
+    if (pressType == POS_FLAG_SHORT)
+    {
+        state = 0;
 
-    while (index < maxLen - 1) {
-        delay(10);
-        char ch = KEYBOARD_READ_CHAR();
+        while (1)
+        {
+            char ch = LUT_GetCharWithModeSwitch(key, state);
+            OLED_DrawCharAtPos(2, pos, ch);
+            uint8_t r = keypadScanPos(2, 0, 1);
 
-        if (ch == '#') { // Enter key
-            if (stopOnEnter) break;
-            continue;
-        } else if (ch == '*') { // Clear key
-            if (index > 0) {
-                index--;
-                buffer[index] = '\0';
+            if (r == ERR_KEYPAD_TIMEOUT)
+                return MAKE_KEYSTATE(key, state);
+
+            uint8_t k2 = POS_GET_KEY(r);
+            uint8_t p2 = POS_GET_FLAG(r);
+
+            if (k2 != key)
+                return MAKE_KEYSTATE(key, state);
+
+            if (p2 == POS_FLAG_SHORT)
+            {
+                if (state < maxState) state++;
+                else return MAKE_KEYSTATE(key, state);
             }
-        } else {
-            buffer[index++] = ch;
-            buffer[index] = '\0';
+            else
+                return MAKE_KEYSTATE(key, state);
         }
     }
+
+    return ERR_KEYPAD_TIMEOUT;
 }
+
+// ================================
+// BUILD PACKED BUFFER (15s timeout)
+// ================================
+uint8_t keypadBuildPacked(void)
+{
+    ksLen = 0;
+    g_activeTable = TABLE_LOWER;
+
+    uint8_t pos = 0;
+    unsigned long lastActivity = millis();
+
+    while (ksLen < MAX_CHARS)
+    {
+        // global idle timeout
+        if (millis() - lastActivity >= KB_IDLE_TIMEOUT)
+            return 0; // cancel/timeout
+
+        uint8_t ks = keypadMultiTap(pos);
+
+        if (ks == ERR_KEYPAD_TIMEOUT)
+            continue;
+
+        lastActivity = millis();
+
+        uint8_t key   = KEY_FROM_KEYSTATE(ks);
+        uint8_t state = STATE_FROM_KEYSTATE(ks);
+
+        // delete
+        if (key == 10)
+        {
+            if (ksLen > 0)
+            {
+                ksLen--;
+                pos--;
+                OLED_ClearCharAtPos(2, pos);
+            }
+            continue;
+        }
+
+        // enter/finish
+        if (key == 11)
+            return ksLen;
+
+        // append
+        ksBuffer[ksLen++] = ks;
+
+        char ch = LUT_GetCharWithModeSwitch(key, state);
+        OLED_DrawCharAtPos(2, pos, ch);
+        pos++;
+    }
+
+    return ksLen;
+}
+
+// ================================
+// DECODE PACKED BUFFER TO TEXT
+// ================================
+void decodePackedBuffer(char *out)
+{
+    g_activeTable = TABLE_LOWER;
+
+    for (uint8_t i = 0; i < ksLen; i++)
+    {
+        uint8_t key   = KEY_FROM_KEYSTATE(ksBuffer[i]);
+        uint8_t state = STATE_FROM_KEYSTATE(ksBuffer[i]);
+        *out++ = LUT_GetCharWithModeSwitch(key, state);
+    }
+
+    *out = '\0';
+}
+
+// ================================
+// HIGH LEVEL API
+// ================================
+char* KEYBOARD_READ_STRING(void)
+{
+    static char decoded[MAX_STRING_LEN];
+
+    uint8_t n = keypadBuildPacked();
+
+    // cancel / timeout / empty input → nullptr
+    if (n == 0)
+        return nullptr;
+
+    decodePackedBuffer(decoded);
+    return decoded;
+}
+
+
+
+
+
+void keypadMultiTapTest(void)
+{
+    uint8_t count = 0;
+
+    printf("MultiTap test start (max 10 keys)\n");
+
+    while (count < 20)
+    {
+        uint8_t v = keypadMultiTap(count);  // displayPosition = count
+
+        if (v == ERR_KEYPAD_TIMEOUT)
+        {
+            printf("[%u] TIMEOUT\n", count);
+            break;
+        }
+
+        uint8_t key   = KEY_FROM_KEYSTATE(v);
+        uint8_t state = STATE_FROM_KEYSTATE(v);
+
+        printf("[%u] RAW=0x%02X  KEY=%u  STATE=%u\n",
+               count, v, key, state);
+
+        count++;
+    }
+
+    printf("MultiTap test end (%u entries)\n", count);
+}
+
+
+
+
+
+
 
 char* KEYBOARD_READ(uint8_t mode, uint8_t special_key)
 {
@@ -522,7 +718,7 @@ char* KEYBOARD_READ(uint8_t mode, uint8_t special_key)
         // ---- idle timeout ----
         if (millis() - lastActivity > idleTimeout)
         {
-            LOG_MIN("KEYBOARD_READ: idle timeout");
+            LOG_MIN("idle timeout");
             return (char*)"@";
         }
 
@@ -582,6 +778,13 @@ char* KEYBOARD_READ(uint8_t mode, uint8_t special_key)
         }
     }
 }
+
+
+
+
+
+
+
 
 
 char KEYBOARD_READ_CONTROL(uint8_t timeoutSeconds)

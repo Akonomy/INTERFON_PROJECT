@@ -7,6 +7,9 @@
 #define CLOCK_PIN 6
 #define LATCH_PIN 5
 
+#define BATTERY_P  0
+
+
 #define S0 1
 #define S1 2
 #define S2 3
@@ -70,7 +73,7 @@ bool GPIO_IS_VALID(uint8_t pin) {
   // Valid ESP physical pins (0–10)
   if (pin <= 10) {
     // block reserved pins
-    if (pin == 0 || pin == 1 || pin == 3 || pin == 4 ||
+    if (pin == 1 || pin == 2 || pin == 3 || pin == 4 ||
         pin == 5 || pin == 6 || pin == 7 ||
         pin == 8 || pin == 9)
       return false; // reserved
@@ -150,7 +153,7 @@ uint16_t GPIO_READ(uint8_t pin) {
   else if (pin >= 100 && pin <= 107) {
     uint8_t ch = pin - 100;
     selectMuxChannel(ch);
-    delay(2);  //leave signal to settle
+    delay(1);  //leave signal to settle
     uint16_t val =analogRead(MUX_INPUT);
     //if (val>0){Serial.print(pin); Serial.print("pn-val"); Serial.print(val);Serial.print("||");}
 
@@ -208,7 +211,7 @@ void GPIO_CHECK_BATTERY(float* battery, uint8_t* tamper) {
     if (!battery || !tamper) return; // safety check
 
     // Step 1: Activate tamper check
-    GPIO_SET(TAMPER_C, true);
+    GPIO_SET(TAMPER_C, false);
 
     // Wait 2ms for stable reading
     delay(2);
@@ -222,6 +225,7 @@ void GPIO_CHECK_BATTERY(float* battery, uint8_t* tamper) {
 
     // Step 3: Read battery voltage
     int adcVal = GPIO_READ(BATTERY_P); // 0–4095
+
 
     // Calibrated scale factor (0 -> 0 V), based on 3 measured points
     const float k = 0.002315f;

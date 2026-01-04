@@ -165,3 +165,113 @@ void OLED_DisplayStrictText(const String &line1, const String &line2) {
 
   display.display();
 }
+
+
+void OLED_DrawCharAtPos(uint8_t size, uint8_t pos, char c)
+{
+  // limit size
+  if (size < 1) size = 1;
+  if (size > 3) size = 3;
+
+  uint8_t charsPerLine = 21 / size;   // integer math OK here
+
+  if (pos >= 2 * charsPerLine) return;  // out of range, ignore
+
+  // determine line number
+  uint8_t line = pos / charsPerLine;    // 0 or 1
+  uint8_t indexInLine = pos % charsPerLine;
+
+  // pixel position
+  int x = indexInLine * (6 * size);
+  int y = line * (8 * size + 2);        // +2 small spacing between lines
+
+  // --- clear ONLY that character box ---
+  display.fillRect(
+      x,
+      y,
+      6 * size,
+      8 * size,
+      SSD1306_BLACK
+  );
+
+  // --- draw new character ---
+  display.setTextSize(size);
+  display.setCursor(x, y);
+  display.write(c);
+
+  display.display();
+}
+
+
+void OLED_ClearCharAtPos(uint8_t size, uint8_t pos)
+{
+    uint8_t charsPerLine = 21 / size;
+
+    uint8_t line = pos / charsPerLine;
+    uint8_t indexInLine = pos % charsPerLine;
+
+    int x = indexInLine * (6 * size);
+    int y = line * (8 * size + 2);
+
+    display.fillRect(x, y, 6 * size, 8 * size, SSD1306_BLACK);
+    display.display();
+}
+
+
+
+
+
+void OLED_TestSimulation()
+{
+  // local LUT
+  static const char LUT[2][10][6] = {
+      {   // LOWER
+          " 0>", ".!?-1", "abc2", "def3", "ghi4",
+          "jkl5", "mno6", "pqrs7", "tuv8", "wxyz9"
+      },
+      {   // UPPER
+          " 0<", ".!?-1", "ABC2", "DEF3", "GHI4",
+          "JKL5", "MNO6", "PQRS7", "TUV8", "WXYZ9"
+      }
+  };
+
+  // choose text size for test
+  uint8_t size = 1;   // change to 1 or 3 if you want
+
+  // clear whole screen once at start
+  display.clearDisplay();
+  display.display();
+
+  // -------- pos 1 : a -> b -> c --------
+  OLED_DrawCharAtPos(size, 0, 'a');
+  delay(300);
+
+  OLED_DrawCharAtPos(size, 0, 'b');
+  delay(300);
+
+  OLED_DrawCharAtPos(size, 0, 'c');
+  delay(300);
+
+  // -------- pos 2 : 1 -> 2 -> 3 --------
+  OLED_DrawCharAtPos(size, 1, '1');
+  delay(300);
+
+  OLED_DrawCharAtPos(size, 1, '2');
+  delay(300);
+
+  OLED_DrawCharAtPos(size, 1, '3');
+  delay(300);
+
+  // -------- pos 8 : a -> 5 -> b --------
+  OLED_DrawCharAtPos(size, 7, 'a');
+  delay(300);
+
+  OLED_DrawCharAtPos(size, 7, '5');
+  delay(300);
+
+  OLED_DrawCharAtPos(size, 7, 'b');
+  delay(300);
+
+  // finished
+}
+

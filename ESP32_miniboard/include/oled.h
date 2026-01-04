@@ -49,4 +49,10 @@ void OLED_Update();
 
 
 void OLED_DisplayStrictText(const String &line1, const String &line2);
+
+void OLED_DrawCharAtPos(uint8_t size, uint8_t pos, char c);
+
+void OLED_ClearCharAtPos(uint8_t size, uint8_t pos);
+
+void OLED_TestSimulation();
 #endif

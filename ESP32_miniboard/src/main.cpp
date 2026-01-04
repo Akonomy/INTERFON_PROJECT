@@ -900,24 +900,28 @@ void mode3() {
         OLED_Clear();
         OLED_DisplayText("Type pass:", 2);
 
-    if (KEYBOARD_ACTIVE()) {
-    char* pass = KEYBOARD_READ(0);
-    if (strcmp(pass, "@service") == 0) { SERVICE_MENU();  }
+if (KEYBOARD_ACTIVE()) {
+     OLED_Clear();
+
+    char* pass = KEYBOARD_READ_STRING();   // blocking keyboard entry
+
+    // ---------- canceled ----------
+    if (pass == nullptr || pass[0] == '\0') {
+        OLED_DisplayStrictText("Canceled", "");
+        delay(1500);
+        enterServiceMode();
+        return;
+    }
+
+    // ---------- show SSID + password ----------
+    OLED_DisplayStrictText(selectedSSID, String(pass));
+    delay(2000);
+
+    OLED_DisplayText("Connecting...", 2);
+
+    WiFi.begin(selectedSSID.c_str(), pass);
 
 
-        if (pass == nullptr || pass[0] == '@' || pass[0] == '\0') {
-          OLED_DisplayStrictText("Canceled", "");
-          delay(1500);
-          enterServiceMode();
-          return;
-        }
-
-        OLED_DisplayStrictText(selectedSSID, String(pass));
-        delay(2000);
-
-        // Try to connect to Wi-Fi
-        OLED_DisplayText("Connecting...", 2);
-        WiFi.begin(selectedSSID.c_str(), pass);
 
         unsigned long start = millis();
         bool connected = false;
@@ -1225,15 +1229,9 @@ void mode7()
 // MODE 8
 void mode8()
 {
-delay(150);
+     TESTkeypadScan();
 
-    if (KEYBOARD_ACTIVE()) {
-
-        LOG("enter keyboard");
-    char* input = KEYBOARD_READ(0);
-    if (strcmp(input, "@service") == 0) { SERVICE_MENU();  }
-    }
-
+    enterServiceMode();
 
 }
 
@@ -1244,13 +1242,16 @@ void mode9()
 
  OLED_DisplayText("TEST ACTIVE ");
  delay(1000);
+ //OLED_TestSimulation();
+
+ delay(1000);
 
  //keypadTestScanner();
 
- uint32_t result=KEYBOARD_READ_NUMBER(6);
+  keypadMultiTapTest();
 
 LOG("RESULT::::::");
- Serial.println(result);
+
 
 
  enterServiceMode();
