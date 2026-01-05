@@ -427,30 +427,49 @@ void UPDATE_BATTERY_SENSOR(float voltage) {
   Serial.println("🔋 Battery update → Voltage: " + String(voltage, 2) + "V, Text: " + value_text + ", Status: " + status);
 }
 
+String getEspTimestamp()
+{
+    struct tm t;
+    if (!getLocalTime(&t))
+        return String(millis()); // fallback brutal, dar sigur
+
+    char buf[20]; // YYYY-MM-DD HH:MM:SS
+    snprintf(buf, sizeof(buf),
+             "%04d-%02d-%02d %02d:%02d:%02d",
+             t.tm_year + 1900,
+             t.tm_mon + 1,
+             t.tm_mday,
+             t.tm_hour,
+             t.tm_min,
+             t.tm_sec);
+
+    return String(buf);
+}
 
 // -----------------------------------------------------------------------------
 //  ACCESS LOG
 // -----------------------------------------------------------------------------
 void LOG_ACCESS(const String& tag_uid,
-                const String& esp_timestamp,
                 const String& result,
-                const String& details) {
-  if (sessionToken == "") {
-    Serial.println("⚠️ No session token. Access log skipped.");
-    return;
-  }
+                const String& details)
+{
+    if (sessionToken == "") {
+        Serial.println("⚠️ No session token. Access log skipped.");
+        return;
+    }
 
-  StaticJsonDocument<256> json;
-  json["device_id"] = DEVICE_ID;
-  json["tag_uid"] = tag_uid;
-  json["esp_timestamp"] = esp_timestamp;
-  json["result"] = result;
-  json["details"] = details;
+    StaticJsonDocument<256> json;
+    json["device_id"]     = DEVICE_ID;
+    json["tag_uid"]       = tag_uid;
+    json["esp_timestamp"] = getEspTimestamp(); // <-- automat
+    json["result"]        = result;
+    json["details"]       = details;
 
-  String payload;
-  serializeJson(json, payload);
-  sendData("/api/accesslog/", payload);
-  Serial.println("📥 Access log sent → " + tag_uid + ": " + result);
+    String payload;
+    serializeJson(json, payload);
+    sendData("/api/accesslog/", payload);
+
+    Serial.println("📥 Access log sent → " + tag_uid + ": " + result);
 }
 
 // -----------------------------------------------------------------------------

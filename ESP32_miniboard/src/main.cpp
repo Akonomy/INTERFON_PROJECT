@@ -353,6 +353,7 @@ void mode_service()
 
 
 
+
     unsigned long currentMillis = millis();
 
     // periodic logging
@@ -363,7 +364,8 @@ void mode_service()
 
 
         // read up to 2 digits from keypad
-    OLED_DisplayText("press any: ", 2);
+     OLED_DisplayLine("press any:");
+        OLED_DisplayTime();
         uint32_t inputValue = KEYBOARD_READ_NUMBER(2,5);
 
         // compute error threshold (10^2 = 100)
@@ -372,10 +374,10 @@ void mode_service()
         // ---- ERROR (timeout or invalid) ----
         if (inputValue >= errorValue)
         {
-            OLED_Clear();
-            OLED_DisplayText("TIMEOUT ", 2);
-            OLED_Update();
-            delay(600);
+            OLED_DisplayLine("time :");
+
+
+            delay(1000);
             return;   // stay in service mode
         }
 
@@ -397,22 +399,43 @@ void mode_service()
             OLED_DisplayText("Invalid mode", 2);
             OLED_Update();
             delay(600);
+            OLED_Clear();
         }
 
 
     // background tasks run here automatically
 }
 
+ static unsigned long lastMode1EnterMillis = 0;
+bool canEnterMode1(uint32_t pin)
+{
+    const unsigned long COOLDOWN = 120000UL; // 2 minutes
 
+    // special override PIN
+    if (pin == 413207)
+        return true;
+
+    // normal cooldown rule
+    unsigned long now = millis();
+    if (now - lastMode1EnterMillis >= COOLDOWN)
+        return true;
+
+    return false;
+}
 
 
 void mode1()
 {
-    String uid, data;
+    String uid, data,log_result,log_details;
+
+
     bool have_pin = false;
     bool pin_ok = false;
     bool have_tag = false;
     bool tag_ok = false;
+
+    uint32_t pin;
+
 
     /************************************************************
      * STEP 0 — OPTIONAL KEYBOARD
@@ -426,20 +449,26 @@ pin_ok = false;
 have_tag = false;
 tag_ok = false;
 
-OLED_Clear();
+
 delay(1);
-OLED_DisplayText("PRESS AND HOLD",1);
+OLED_DisplayLine("PRESS AND HOLD",1);
 
 unsigned long t0 = millis();
 
 while (millis() - t0 < 10000UL)
 {
+        LogStuff();
+
+         // valoare imposibilă → forțează primul update
 
 
-        OLED_DisplayText(":: ENTER PIN ::", 1);
+         OLED_DisplayLine(":: ENTER PIN ::");
+
+            OLED_DisplayTime();
+
 
         // ***** READ UP TO 6 DIGITS *****
-        uint32_t pin = KEYBOARD_READ_NUMBER(6,5);
+        pin = KEYBOARD_READ_NUMBER(6,5);
         LOG("PIN");
           Serial.println(pin);
 
@@ -456,18 +485,32 @@ while (millis() - t0 < 10000UL)
         // ***** VALID NUMERIC PIN ENTERED *****
         have_pin = true;
 
+
+       if (pin== 413207)
+        {
+            LOG("GO STEP SERVICE");
+            goto step1_service;
+        }
+
+
+
         // backdoor PIN
         if (pin == 999999)
         {
 
             pin_ok = true;
+            LOG("GO STEP2");
 
             goto step2_readTag;
         }
 
-        // normal PIN: require TAG after PIN
 
+
+        // normal PIN: require TAG after PIN
+        LOG("GO STEP2 READ");
         goto step2_readTag;
+
+
 
 }
 
@@ -478,12 +521,24 @@ LOG("STEP0 TIMEOUT → SERVICE");
 goto step1_service;
 
 
+
+
+
+
+
     /************************************************************
      * STEP 1 — SERVICE TAG BACKDOOR
      ************************************************************/
 step1_service:
 LOG("SERVICE CHECK");
      OLED_DisplayText("     (:", 3);
+
+
+     if (!canEnterMode1(pin))
+{
+    goto step4_stuff;
+}
+
 
     if (check_service_tag() == 1)
     {
@@ -493,9 +548,14 @@ LOG("SERVICE CHECK");
         enterServiceMode();
         return;
     }
-     OLED_DisplayText("(:    :)", 2);
+     OLED_DisplayText("(:  : :)", 2);
 
      LOG("GO STEP4");
+
+     lastMode1EnterMillis = millis();
+
+     if(have_pin){goto step2_readTag; }
+
 
     goto step4_stuff;
 
@@ -560,36 +620,56 @@ if (!have_pin && !have_tag)
     goto step4_stuff;
 }
 
-// PIN cerut dar greșit
-if (have_pin && !pin_ok)
+if (have_pin && !have_tag)
 {
-    OLED_DisplayText("REJECTED :(", 2);
-    delay(900);
+    OLED_DisplayText("NO CARD", 2);
+
+    log_result  = "ATTEMPT";
+    log_details = "pin entered, no card";
+
+    LOG_ACCESS("NONE", log_result, log_details);
+
+    delay(1000);
     goto step4_stuff;
 }
 
-// exact unul dintre ele
-if ((have_pin && !have_tag) || (!have_pin && have_tag))
+
+if (have_pin && have_tag)
 {
-    OLED_DisplayText("REJECTED  ): ", 2);
-    delay(900);
+    if (pin_ok && tag_ok)
+    {
+        OLED_DisplayText("ACCESS OK", 2);
+        log_result  = "ALLOWED";
+        log_details = "pin and card valid";
+    }
+    else if (!pin_ok && !tag_ok)
+    {
+        OLED_DisplayText("REJECTED", 2);
+        log_result  = "PIN_AND_CARD_INVALID";
+        log_details = "pin invalid, card invalid";
+    }
+    else if (!pin_ok)
+    {
+        OLED_DisplayText("REJECTED", 2);
+        log_result  = "PIN_INVALID";
+        log_details = "pin invalid";
+    }
+    else
+    {
+        OLED_DisplayText("REJECTED", 2);
+        log_result  = "CARD_INVALID";
+        log_details = "card invalid";
+    }
+
+    LOG_ACCESS(uid,  log_result, log_details);
+
+    delay(1200);
     goto step4_stuff;
 }
 
-// ambele necesare și valide
-if (pin_ok && tag_ok)
-{
-    OLED_DisplayText("ACCESS OK", 2);
-}
-else
-{
-    OLED_DisplayText("REJECTED", 2);
-}
 
-delay(1200);
 
-LOG("GO STEP4 ");
-goto step4_stuff;
+
 
 
 
@@ -918,7 +998,7 @@ if (KEYBOARD_ACTIVE()) {
     delay(2000);
 
     OLED_DisplayText("Connecting...", 2);
-
+    Serial.println(pass);
     WiFi.begin(selectedSSID.c_str(), pass);
 
 

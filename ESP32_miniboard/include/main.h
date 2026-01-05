@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "oled_queue.h"
-
+#include <time.h>
 // -----------------------
 // MODE SYSTEM
 // -----------------------

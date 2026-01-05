@@ -1,48 +1,170 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Syslog Viewer</title>
-<style>
-body { font-family: Arial, sans-serif; background-color: #f4f4f4; color: #333; }
-table { width: 100%; border-collapse: collapse; margin: 20px auto; background: white; }
-th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-th { background-color: #333; color: white; }
-.level-0 { background-color: #ff0000; color: white; }
-.level-1 { background-color: #ff4500; color: white; }
-.level-2 { background-color: #ff6347; color: white; }
-.level-3 { background-color: #ff8c00; color: white; }
-.level-4 { background-color: #ffa500; color: white; }
-.level-5 { background-color: #f0e68c; color: black; }
-.level-6 { background-color: #90ee90; color: black; }
-.level-7 { background-color: #d3d3d3; color: black; }
+{% extends "arduino_comm/base.html" %}
 
-/* Pagination styling */
-.pagination { text-align: center; margin: 20px 0; }
+{% block title %}Syslog Logs{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-3">Syslog Logs</h2>
+
+<style>
+/* keep your priority colors */
+.table-dark tbody tr.level-0 td { background-color:#ff0000 !important; color:white !important; }
+.table-dark tbody tr.level-1 td { background-color:#ff4500 !important; color:white !important; }
+.table-dark tbody tr.level-2 td { background-color:#ff6347 !important; color:white !important; }
+.table-dark tbody tr.level-3 td { background-color:#ff8c00 !important; color:white !important; }
+.table-dark tbody tr.level-4 td { background-color:#ffa500 !important; color:black !important; }
+.table-dark tbody tr.level-5 td { background-color:#f0e68c !important; color:black !important; }
+.table-dark tbody tr.level-6 td { background-color:#90ee90 !important; color:black !important; }
+.table-dark tbody tr.level-7 td { background-color:#d3d3d3 !important; color:black !important; }
+
+/* FORCE hover color override (beats Bootstrap) */
+.table.table-dark.table-hover tbody tr.level-0:hover td { background-color:#aa0000 !important; }
+.table.table-dark.table-hover tbody tr.level-1:hover td { background-color:#aa2f00 !important; }
+.table.table-dark.table-hover tbody tr.level-2:hover td { background-color:#aa3f30 !important; }
+.table.table-dark.table-hover tbody tr.level-3:hover td { background-color:#aa5a00 !important; }
+.table.table-dark.table-hover tbody tr.level-4:hover td { background-color:#c77700 !important; }
+.table.table-dark.table-hover tbody tr.level-5:hover td { background-color:#c8b84d !important; }
+.table.table-dark.table-hover tbody tr.level-6:hover td { background-color:#55aa55 !important; }
+.table.table-dark.table-hover tbody tr.level-7:hover td { background-color:#a6a6a6 !important; }
+
+
+/* dark pagination look */
 .pagination a, .pagination span {
-    display: inline-block;
-    padding: 6px 12px;
-    margin: 2px;
-    border: 1px solid #333;
-    color: #333;
-    text-decoration: none;
-    border-radius: 4px;
+    display:inline-block;
+    padding:6px 12px;
+    margin:2px;
+    border:1px solid #555;
+    color:#ddd;
+    text-decoration:none;
+    border-radius:4px;
 }
 .pagination a:hover {
-    background-color: #333;
-    color: white;
+    background:#888;
+    color:black;
 }
 .pagination .current {
-    background-color: #333;
-    color: white;
-    font-weight: bold;
+    background:#0d6efd;
+    color:white;
+    border-color:#0d6efd;
+    font-weight:bold;
 }
+.table-hover tbody tr:hover td {
+    background-color: rgba(255,255,255,.075);
+}
+
+
+/* consistent cyan theme controls */
+form.card input,
+form.card select {
+    background-color: #020617 !important;
+    color: #e0faff !important;
+    border: 1px solid #22d3ee !important;
+}
+
+/* placeholders */
+form.card input::placeholder {
+    color: #67e8f9 !important;
+}
+
+/* dropdown menu */
+form.card select option {
+    background-color: #020617 !important;
+    color: #e0faff !important;
+}
+
+/* focus glow */
+form.card input:focus,
+form.card select:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(34,211,238,.7) !important;
+    border-color: #67e8f9 !important;
+}
+
+
+
 </style>
-</head>
-<body>
+<form method="get" class="card card-body mb-3 bg-dark border-secondary">
 
-<h2 style="text-align: center;">Syslog Logs</h2>
+  <div class="row g-2">
 
-<table>
+    <div class="col-md-3">
+      <input type="text" name="q" class="form-control form-control-sm"
+             placeholder="Search message / host / tag"
+             value="{{ request.GET.q }}">
+    </div>
+
+    <div class="col-md-2">
+      <input type="text" name="host" class="form-control form-control-sm"
+             placeholder="Host"
+             value="{{ request.GET.host }}">
+    </div>
+
+    <div class="col-md-2">
+      <input type="text" name="ip" class="form-control form-control-sm"
+             placeholder="IP"
+             value="{{ request.GET.ip }}">
+    </div>
+
+    <div class="col-md-2">
+      <select name="level" class="form-select form-select-sm">
+        <option value="">Priority = any</option>
+        {% for val,label in LOG_LEVELS %}
+          <option value="{{ val }}" {% if request.GET.level == val|stringformat:"s" %}selected{% endif %}>
+            {{ val }} {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-1">
+      <select name="min" class="form-select form-select-sm">
+        <option value="">Min</option>
+        {% for val,label in LOG_LEVELS %}
+        <option value="{{ val }}">{{ val }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-1">
+      <select name="max" class="form-select form-select-sm">
+        <option value="">Max</option>
+        {% for val,label in LOG_LEVELS %}
+        <option value="{{ val }}">{{ val }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <select name="order" class="form-select form-select-sm">
+        <option value="-timestamp">Newest first</option>
+        <option value="timestamp">Oldest first</option>
+        <option value="-priority">Highest priority first</option>
+        <option value="priority">Lowest priority first</option>
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <input type="date" name="start" class="form-control form-control-sm"
+             value="{{ request.GET.start }}">
+    </div>
+
+    <div class="col-md-2">
+      <input type="date" name="end" class="form-control form-control-sm"
+             value="{{ request.GET.end }}">
+    </div>
+
+    <div class="col-md-2">
+      <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+      <a href="." class="btn btn-secondary btn-sm">Reset</a>
+    </div>
+
+  </div>
+
+</form>
+
+
+
+<table class="table table-dark table-hover">
 <thead>
 <tr>
       <th>Server Time</th>
@@ -55,8 +177,8 @@ th { background-color: #333; color: white; }
       <th>Message</th>
 </tr>
 </thead>
-<tbody>
 
+<tbody>
 {% for log in page_obj %}
 <tr class="level-{{ log.priority }}">
       <td>{{ log.timestamp }}</td>
@@ -69,14 +191,16 @@ th { background-color: #333; color: white; }
       <td>{{ log.message }}</td>
 </tr>
 {% empty %}
-<tr><td colspan="8" style="text-align:center;">No logs found.</td></tr>
+<tr>
+  <td colspan="8" class="text-center text-muted">
+      No logs found.
+  </td>
+</tr>
 {% endfor %}
-
 </tbody>
 </table>
 
-<!-- Pagination -->
-<div class="pagination">
+<div class="pagination text-center">
     {% if page_obj.has_previous %}
         <a href="?page=1">« First</a>
         <a href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
@@ -96,5 +220,4 @@ th { background-color: #333; color: white; }
     {% endif %}
 </div>
 
-</body>
-</html>
+{% endblock %}

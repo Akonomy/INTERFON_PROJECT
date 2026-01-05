@@ -75,7 +75,7 @@ static uint32_t pow10u(uint8_t n)
 
 #define NO_KEY            255u // eroare fara tasta
 #define COL_THRESHOLD    100u //nu modifica aici e nivelul care se considera tasta activa
-#define KEY_TIMEOUT_MS   296u  //timp dupa care se returneaza automat chiar daca tasta e inca apasata
+#define KEY_TIMEOUT_MS   400u  //timp dupa care se returneaza automat chiar daca tasta e inca apasata
 
 #define POS_LONG_PRESS   0x80
 #define POS_ROW_MASK     0x0C
@@ -118,7 +118,7 @@ uint8_t keypadScanPos(
     unsigned long scanStart = millis();
     unsigned long scanTimeout = (unsigned long)scanSeconds * 1000UL;
 
-    const unsigned long autoReturnMs = needLongPress ? 1000UL : 256UL;
+    const unsigned long autoReturnMs = needLongPress ? 1000UL : 450UL;
     unsigned long noKeyStart = 0;
 
     for (uint8_t r = 0; r < 4; r++)
@@ -148,7 +148,7 @@ uint8_t keypadScanPos(
             {
                 if (noKeyStart == 0)
                     noKeyStart = millis();
-                else if (millis() - noKeyStart >= 200)
+                else if (millis() - noKeyStart >= 350)
                     return ERR_KEYPAD_TIMEOUT; // fast exit
             }
             continue;
@@ -193,7 +193,7 @@ uint8_t keypadScanPos(
 
                 if (!needLongPress)
                 {
-                    if (dt < 110)  //timp de apasare tasta pt a fi considerata short press
+                    if (dt < 155)  //timp de apasare tasta pt a fi considerata short press
                         return pos | POS_FLAG_SHORT;
                     else
                         return pos | POS_FLAG_NORMAL;
@@ -491,7 +491,7 @@ static uint8_t keyMaxState(uint8_t key)
 
     if (key == 0) return 2;     // 3 states
     if (key == 1 || key == 7 || key == 9)
-        return 5;               // 5 states
+        return 4;               // 5 states
 
     return 3;                   // default 4 states
 }
@@ -519,6 +519,7 @@ char LUT_GetCharWithModeSwitch(uint8_t key, uint8_t state)
 // ================================
 uint8_t keypadMultiTap(uint8_t pos)
 {
+
     uint8_t state = 0;
 
     uint8_t res = keypadScanPos(5, 0, 0);
@@ -534,12 +535,21 @@ uint8_t keypadMultiTap(uint8_t pos)
     if (key == 11) return MAKE_KEYSTATE(11, 7); // enter
 
     // long press → last state
-    if (pressType == POS_FLAG_LONG)
+    if (pressType == POS_FLAG_LONG){
+        char chs = LUT_GetCharWithModeSwitch(key, maxState);
+        OLED_DrawCharAtPos(2, pos, chs);
+        delay(200);
         return MAKE_KEYSTATE(key, maxState);
+    }
 
     // normal press → state 0
     if (pressType == POS_FLAG_NORMAL)
+    {
+        char chl = LUT_GetCharWithModeSwitch(key, 0);
+        OLED_DrawCharAtPos(2, pos, chl);
+        delay(200);
         return MAKE_KEYSTATE(key, 0);
+    }
 
     // short press → cycle
     if (pressType == POS_FLAG_SHORT)
@@ -601,6 +611,19 @@ uint8_t keypadBuildPacked(void)
         uint8_t key   = KEY_FROM_KEYSTATE(ks);
         uint8_t state = STATE_FROM_KEYSTATE(ks);
 
+        //table change
+
+        if (key==0 && state==2){
+
+
+                delay(210);
+                OLED_ClearCharAtPos(2, pos);
+                ksBuffer[ksLen++] = ks;
+                continue;
+
+
+        }
+
         // delete
         if (key == 10)
         {
@@ -614,8 +637,9 @@ uint8_t keypadBuildPacked(void)
         }
 
         // enter/finish
-        if (key == 11)
+        if (key == 11){
             return ksLen;
+        }
 
         // append
         ksBuffer[ksLen++] = ks;
@@ -639,11 +663,19 @@ void decodePackedBuffer(char *out)
     {
         uint8_t key   = KEY_FROM_KEYSTATE(ksBuffer[i]);
         uint8_t state = STATE_FROM_KEYSTATE(ksBuffer[i]);
-        *out++ = LUT_GetCharWithModeSwitch(key, state);
+
+        char ch = LUT_GetCharWithModeSwitch(key, state);
+
+        // swallow mode-switch characters
+        if (key == 0 && (ch == '>' || ch == '<'))
+            continue;
+
+        *out++ = ch;
     }
 
     *out = '\0';
 }
+
 
 // ================================
 // HIGH LEVEL API

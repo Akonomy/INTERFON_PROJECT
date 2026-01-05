@@ -1,48 +1,68 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Access Logs</title>
-  <style>
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    th { background: #eee; }
-    .granted { color: green; }
-    .denied { color: red; }
-  </style>
-</head>
-<body>
-  <h1>Access Log</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>ESP Time</th>
-        <th>Tag UID</th>
-        <th>Person</th>
-        <th>Device</th>
-        <th>Result</th>
-        <th>Details</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for log in logs %}
-      <tr>
-        <td>{{ log.server_timestamp }}</td>
-        <td>{{ log.esp_timestamp }}</td>
-        <td>{{ log.tag_uid }}</td>
-        <td>{% if log.person %}
-  {{ log.person.full_name }}
-{% else %}
-  Unknown
-{% endif %}
+{% extends "arduino_comm/base.html" %}
+
+{% block title %}Access Logs{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-3">Access Logs</h2>
+
+<table class="table table-dark table-hover">
+  <thead>
+    <tr>
+      <th>Timestamp</th>
+      <th>ESP Time</th>
+      <th>Tag UID</th>
+      <th>Person</th>
+      <th>Device</th>
+      <th>Result</th>
+      <th>Details</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for log in logs %}
+    <tr>
+      <td>{{ log.server_timestamp }}</td>
+      <td>{{ log.esp_timestamp }}</td>
+      <td>{{ log.tag_uid }}</td>
+
+      <td>
+        {% if log.person %}
+          {{ log.person.full_name }}
+        {% else %}
+          <span class="text-muted">Unknown</span>
+        {% endif %}
+      </td>
+
+      <td>{{ log.device.name|default:"—" }}</td>
+
+  <td>
+  {% if log.result == "ALLOWED" %}
+      <span class="badge bg-success">{{ log.result }}</span>
+
+  {% elif log.result == "PIN_AND_CARD_INVALID" or log.result == "ATTEMPT" %}
+      <span class="badge bg-danger">{{ log.result }}</span>
+
+  {% elif log.result == "PIN_INVALID" or log.result == "CARD_INVALID" %}
+      <span class="badge bg-warning text-dark">{{ log.result }}</span>
+
+  {% else %}
+      <span class="badge bg-secondary">{{ log.result }}</span>
+  {% endif %}
 </td>
 
-        <td>{{ log.device.name }}</td>
-        <td class="{{ log.result }}">{{ log.get_result_display }}</td>
-        <td>{{ log.details }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</body>
-</html>
+
+      <td>{{ log.details|default:"—" }}</td>
+    </tr>
+
+    {% empty %}
+    <tr>
+      <td colspan="7" class="text-center text-muted">
+        No access logs found.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

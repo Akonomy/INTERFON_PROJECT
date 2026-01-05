@@ -783,16 +783,117 @@ def web_send_command(request):
 
 
 
+
+
+from django.db.models import Q
 from django.core.paginator import Paginator
+from .models import LOG_LEVELS
 
 def syslog_view(request):
-    log_list = SyslogEntry.objects.order_by('-timestamp')
+    logs = SyslogEntry.objects.all()
 
-    paginator = Paginator(log_list, 20)  # 100 loguri per pagină
-    page_number = request.GET.get('page')
+    # -------- FILTERS -------- #
+
+    # exact priority match
+    level = request.GET.get("level")
+
+    # min / max priority range
+    min_level = request.GET.get("min")
+    max_level = request.GET.get("max")
+
+    # severity field (you also have this)
+    severity = request.GET.get("severity")
+
+    # host / tag / facility filters
+    host = request.GET.get("host")
+    facility = request.GET.get("facility")
+    tag = request.GET.get("tag")
+
+    # IP filter
+    ip = request.GET.get("ip")
+
+    # full-text search
+    query = request.GET.get("q")
+
+    # date range support
+    start_date = request.GET.get("start")
+    end_date = request.GET.get("end")
+
+    # -------- APPLY FILTERS -------- #
+
+    if level:
+        logs = logs.filter(priority=level)
+
+    if min_level:
+        logs = logs.filter(priority__gte=min_level)
+
+    if max_level:
+        logs = logs.filter(priority__lte=max_level)
+
+    if severity:
+        logs = logs.filter(severity=severity)
+
+    if host:
+        logs = logs.filter(host__icontains=host)
+
+    if facility:
+        logs = logs.filter(facility__icontains=facility)
+
+    if tag:
+        logs = logs.filter(tag__icontains=tag)
+
+    if ip:
+        logs = logs.filter(ip__icontains=ip)
+
+    if query:
+        logs = logs.filter(
+            Q(message__icontains=query)
+            | Q(tag__icontains=query)
+            | Q(host__icontains=query)
+        )
+
+    if start_date:
+        logs = logs.filter(timestamp__date__gte=start_date)
+
+    if end_date:
+        logs = logs.filter(timestamp__date__lte=end_date)
+
+    # -------- SORTING -------- #
+
+    order = request.GET.get("order", "-timestamp")
+
+    allowed_order_fields = [
+        "timestamp",
+        "-timestamp",
+        "priority",
+        "-priority",
+        "severity",
+        "-severity",
+        "host",
+        "-host",
+    ]
+
+    if order in allowed_order_fields:
+        logs = logs.order_by(order)
+    else:
+        logs = logs.order_by("-timestamp")
+
+    # -------- PAGINATION -------- #
+
+    paginator = Paginator(logs, 50)
+    page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    return render(request, 'arduino_comm/syslog.html', {'page_obj': page_obj})
+    return render(
+        request,
+        "arduino_comm/syslog.html",
+        {
+            "page_obj": page_obj,
+            "LOG_LEVELS": LOG_LEVELS,
+        },
+    )
+
+
 
 
 from django.http import JsonResponse

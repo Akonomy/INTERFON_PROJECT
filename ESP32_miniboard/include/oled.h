@@ -44,6 +44,10 @@ void OLED_DisplayDebug(const String &text, int x = 0, int y = 0, int size = 1, b
 // Displays a password input (shows last char briefly before replacing with '*')
 void OLED_DisplayPassword(const String &input, bool reset = false);
 
+
+void OLED_DisplayTime();
+void OLED_DisplayLine(const String& text, uint8_t line=1);
+
 // Updates internal timers (call this in loop)
 void OLED_Update();
 

@@ -71,7 +71,6 @@ void UPDATE_BATTERY_SENSOR(float voltage);
 //  ACCESS LOGGING
 // -----------------------------------------------------------------------------
 void LOG_ACCESS(const String& tag_uid,
-                const String& esp_timestamp,
                 const String& result,
                 const String& details);
 

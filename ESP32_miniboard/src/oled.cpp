@@ -113,6 +113,80 @@ void OLED_DisplayPassword(const String &input, bool reset) {
 // Must be called repeatedly in loop() to mask
 // the last shown password character after timeout.
 //
+
+void OLED_DisplayTime()
+{
+    static uint8_t lastMinute = 255;
+    static unsigned long lastCheckMillis = 0;
+
+    unsigned long now = millis();
+
+    // rate limit: max once every 35 seconds
+    if (now - lastCheckMillis < 5000UL)
+        return;
+
+    lastCheckMillis = now;
+
+    struct tm t;
+    if (!getLocalTime(&t))
+        return;
+
+    uint8_t currentMin = t.tm_min;
+
+    // if minute didn't change → nothing to do
+    if (currentMin == lastMinute)
+        return;
+
+    lastMinute = currentMin;
+
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02d:%02d", t.tm_hour, t.tm_min);
+
+    // clear ONLY line 2
+    display.fillRect(0, 16, SCREEN_WIDTH, 16, SSD1306_BLACK);
+
+    display.setTextSize(2);
+    display.setCursor(0, 16);
+    display.print(buf);
+    display.display();
+}
+
+
+void OLED_DisplayLine(const String& text, uint8_t line)
+{
+    if (line < 1 || line > 2) return;
+
+    // copiem textul
+    String t = text;
+
+    uint8_t size = 1;
+    if (t.length() <= 10)
+        size = 2;
+
+    if (t.length() > 21)
+        t = t.substring(0, 21);
+
+    int yBase = (line == 1) ? 0 : 16;
+    int yText = yBase;
+
+    // ștergem complet linia
+    display.fillRect(0, yBase, SCREEN_WIDTH, 16, SSD1306_BLACK);
+
+    // ajustăm cursorul dacă size 1
+    if (size == 1)
+        yText = yBase + 4;
+
+    display.setTextSize(size);
+    display.setCursor(0, yText);
+    display.print(t);
+    display.display();
+}
+
+
+
+
+
+
 void OLED_Update() {
   if (waitingToMask && millis() - lastCharShowTime >= PASSWORD_SHOW_TIME) {
     // Replace last shown char with '*'
@@ -128,6 +202,21 @@ void OLED_Update() {
     display.display();
   }
 }
+
+
+void OLED_ClearLine(uint8_t line)
+{
+    // linia 1 sau 2
+    if (line < 1 || line > 2) return;
+
+    int y = (line == 1) ? 0 : 16;
+
+    // ștergem zona maximă posibilă (size 2)
+    display.fillRect(0, y, SCREEN_WIDTH, 16, SSD1306_BLACK);
+    display.display();
+}
+
+
 
 
 void OLED_DisplayStrictText(const String &line1, const String &line2) {

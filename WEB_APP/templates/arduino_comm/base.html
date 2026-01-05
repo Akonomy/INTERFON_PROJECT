@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %} LOGS{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+  <style>
+    body {
+      background: #0b0f17;
+      color: #d9e2ef;
+    }
+
+    /* Navbar */
+    .navbar {
+      background: #0f1724 !important;
+      border-bottom: 1px solid rgba(0,255,255,0.25);
+      box-shadow: 0 0 12px rgba(0,255,255,0.15);
+    }
+
+    .navbar-brand,
+    .nav-link {
+      color: #a9dffb !important;
+    }
+
+    .nav-link:hover {
+      color: cyan !important;
+      text-shadow: 0 0 4px cyan;
+    }
+
+    /* Main cards/containers */
+    .card-dark {
+      background: rgba(15, 23, 36, 0.9);
+      border: 1px solid rgba(0,255,255,0.15);
+      border-radius: 14px;
+      box-shadow: 0 0 18px rgba(0,255,255,0.1);
+      padding: 18px;
+    }
+
+    /* Modern table */
+    table.table-dark {
+      background: rgba(10, 16, 26, 0.9);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    thead tr {
+      background: rgba(0, 255, 255, 0.1);
+      color: cyan;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(0,255,255,0.08);
+    }
+
+    tbody tr:hover {
+      background: rgba(0,255,255,0.08);
+      box-shadow: inset 0 0 12px rgba(0,255,255,0.2);
+    }
+
+    /* Buttons */
+    .btn-cyan {
+      background: #00ffff22;
+      border: 1px solid cyan;
+      color: cyan;
+    }
+    .btn-cyan:hover {
+      background: cyan;
+      color: #021014;
+      text-shadow: none;
+    }
+
+    .btn-danger {
+      box-shadow: 0 0 8px rgba(255,0,0,0.4);
+    }
+
+    .btn-success {
+      box-shadow: 0 0 8px rgba(0,255,170,0.4);
+    }
+
+    /* Form inputs dark mode */
+    input, select, textarea {
+      background: #0d1625 !important;
+      color: #e8f5ff !important;
+      border: 1px solid rgba(0,255,255,0.25) !important;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none !important;
+      box-shadow: 0 0 12px cyan !important;
+      border-color: cyan !important;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Access Control</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link" href="{% url 'main:dashboard' %}">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'arduino_comm:access_log_list' %}">Acces log history</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'arduino_comm:syslog_view' %}">Syslog</a></li>
+
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container card-dark">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
