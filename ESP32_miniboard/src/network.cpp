@@ -688,9 +688,11 @@ void deleteTAG(const String& tag_uid, const String& reason) {
 // 0 -> rejected, timeout, or error
 uint8_t waitForTagFullyApproved(const String& uid)
 {
-    const unsigned long timeoutMs   = 180000UL; // 3 minutes
-    const unsigned long pollInterval = 3000UL;  // 3 seconds
+    const unsigned long timeoutMs    = 180000UL; // 3 minutes
+    const unsigned long pollInterval = 3000UL;   // 3 seconds
     unsigned long start = millis();
+
+    uint8_t networkErrorCount = 0;   // <-- contor erori rețea
 
     while (millis() - start < timeoutMs)
     {
@@ -703,6 +705,7 @@ uint8_t waitForTagFullyApproved(const String& uid)
         // -------------------------
         if (status == 0)
         {
+            networkErrorCount = 0; // resetăm la răspuns valid
             OLED_DisplayStrictText(
                 "PENDING APPROVAL",
                 "PLEASE APPROVE TAG"
@@ -714,6 +717,7 @@ uint8_t waitForTagFullyApproved(const String& uid)
         // -------------------------
         else if (status == 1)
         {
+            networkErrorCount = 0;
             OLED_DisplayStrictText(
                 "APPROVED",
                 "PLEASE ADD OWNER"
@@ -725,6 +729,7 @@ uint8_t waitForTagFullyApproved(const String& uid)
         // -------------------------
         else if (status == 2)
         {
+            networkErrorCount = 0;
             OLED_DisplayStrictText(
                 "SUCCESS",
                 "TAG APPROVED"
@@ -738,6 +743,7 @@ uint8_t waitForTagFullyApproved(const String& uid)
         // -------------------------
         else if (status == 3)
         {
+            networkErrorCount = 0;
             OLED_DisplayStrictText(
                 "TAG REJECTED",
                 "CONTACT SERVICE"
@@ -751,10 +757,32 @@ uint8_t waitForTagFullyApproved(const String& uid)
         // -------------------------
         else
         {
+            networkErrorCount++;
+
             OLED_DisplayStrictText(
                 "STATUS ERROR",
                 "CHECK NETWORK"
             );
+            authenticate();
+
+             OLED_DisplayStrictText(
+                "STATUS ERROR",
+                "CHECK SERVER"
+            );
+
+            // Dacă avem 5 erori consecutive → exit
+            if (networkErrorCount >= 5)
+            {
+
+                OLED_DisplayStrictText(
+                    "NETWORK FAIL",
+                    "CHECK SERVER"
+                );
+                delay(1500);
+                return 0;
+            }
+
+            delay(1000);
         }
 
         delay(pollInterval);
@@ -772,7 +800,6 @@ uint8_t waitForTagFullyApproved(const String& uid)
 
     return 0;
 }
-
 
 
 

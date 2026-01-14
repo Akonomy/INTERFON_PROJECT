@@ -82,11 +82,13 @@ void LogStuff() {
 
     // -------- BATERIE --------
     if (!alertTriggered) {
+          UPDATE_BATTERY_SENSOR(battery);
         if (battery < 2.5f) {
             severity = 0;
             alertTriggered = true;
             triggerSource  = "battery";
             triggerReason  = "BATERIE CRITICA";
+
         } else if (battery < 4.3f) {
             severity = 3;
             alertTriggered = true;
@@ -182,4 +184,5 @@ else {
 
 
     logSensorEvent(severity, triggerSource, msg, 2);
+    UPDATE_BATTERY_SENSOR(battery);
 }

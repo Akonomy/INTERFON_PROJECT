@@ -24,6 +24,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django import forms
 from django.urls import reverse
 from django.contrib import messages
+
+
+
+
+
+
+from django.db.models import Q
+from django.core.paginator import Paginator
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Third-Party Imports
 # ─────────────────────────────────────────────────────────────────────────────
@@ -43,6 +52,7 @@ from .models import (
     Command,
     CommandQueue,
     CommandLog,
+     LOG_LEVELS,
 )
 
 
@@ -785,10 +795,6 @@ def web_send_command(request):
 
 
 
-from django.db.models import Q
-from django.core.paginator import Paginator
-from .models import LOG_LEVELS
-
 def syslog_view(request):
     logs = SyslogEntry.objects.all()
 
@@ -1081,7 +1087,62 @@ def battery_history_view(request):
 # ──────────────── ACCESS LOG VIEWS ────────────────
 def access_log_list(request):
     logs = AccessLog.objects.select_related("device", "person", "tag").all()
-    return render(request, "arduino_comm/access_log.html", {"logs": logs})
+
+    # ----- TEXT SEARCH -----
+    q = request.GET.get("q")
+
+    if q:
+        logs = logs.filter(
+            Q(person__full_name__icontains=q) |
+            Q(device__name__icontains=q) |
+            Q(tag_uid__icontains=q) |
+            Q(details__icontains=q)
+        )
+
+    # ----- FILTER BY RESULT -----
+    result = request.GET.get("result")
+    if result:
+        logs = logs.filter(result=result)
+
+    # ----- FILTER BY DEVICE -----
+    device = request.GET.get("device")
+    if device:
+        logs = logs.filter(device__name__icontains=device)
+
+    # ----- DATE RANGE -----
+    start = request.GET.get("start")
+    end = request.GET.get("end")
+
+    if start:
+        logs = logs.filter(server_timestamp__date__gte=start)
+
+    if end:
+        logs = logs.filter(server_timestamp__date__lte=end)
+
+    # ----- SORTING -----
+    order = request.GET.get("order", "-server_timestamp")
+    allowed = [
+        "server_timestamp",
+        "-server_timestamp",
+        "result",
+        "-result",
+    ]
+    if order in allowed:
+        logs = logs.order_by(order)
+
+    # ----- PAGINATION (20 per page) -----
+    paginator = Paginator(logs, 20)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(
+        request,
+        "arduino_comm/access_log.html",
+        {
+            "page_obj": page_obj,
+            "results": AccessLog.AccessResult.choices,
+        },
+    )
 
 
 

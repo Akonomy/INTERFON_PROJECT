@@ -6,35 +6,142 @@
 
 <h2 class="mb-3">Access Logs</h2>
 
+<style>
+/* cyan theme controls */
+form.card input,
+form.card select {
+    background-color: #020617 !important;
+    color: #e0faff !important;
+    border: 1px solid #22d3ee !important;
+}
+
+form.card input::placeholder {
+    color: #67e8f9 !important;
+}
+
+form.card select option {
+    background-color: #020617 !important;
+    color: #e0faff !important;
+}
+
+form.card input:focus,
+form.card select:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(34,211,238,.7) !important;
+    border-color: #67e8f9 !important;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const form = document.querySelector("form.card");
+
+    // 1) Auto-submit when any <select> or <input type="date"> changes
+    form.querySelectorAll("select, input[type='date']").forEach(function(el) {
+        el.addEventListener("change", function () {
+            form.submit();
+        });
+    });
+
+    // 2) Pressing Enter in any text field submits form
+    form.querySelectorAll("input[type='text']").forEach(function(el) {
+        el.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();  // prevents accidental newlines etc.
+                form.submit();
+            }
+        });
+    });
+
+});
+</script>
+
+<form method="get" class="card card-body mb-3 bg-dark border-secondary">
+
+  <div class="row g-2">
+
+    <div class="col-md-3">
+      <input type="text" name="q" class="form-control form-control-sm"
+             placeholder="Search person / device / tag / details"
+             value="{{ request.GET.q }}">
+    </div>
+
+    <div class="col-md-2">
+      <input type="text" name="device" class="form-control form-control-sm"
+             placeholder="Device name"
+             value="{{ request.GET.device }}">
+    </div>
+
+    <div class="col-md-2">
+      <select name="result" class="form-select form-select-sm">
+        <option value="">Result = any</option>
+        {% for value,label in results %}
+          <option value="{{ value }}" {% if request.GET.result == value %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <select name="order" class="form-select form-select-sm">
+        <option value="-server_timestamp">Newest first</option>
+        <option value="server_timestamp">Oldest first</option>
+      </select>
+    </div>
+
+    <div class="col-md-1">
+      <input type="date" name="start" class="form-control form-control-sm"
+             value="{{ request.GET.start }}">
+    </div>
+
+    <div class="col-md-1">
+      <input type="date" name="end" class="form-control form-control-sm"
+             value="{{ request.GET.end }}">
+    </div>
+
+    <div class="col-md-1">
+      <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+      <a href="." class="btn btn-secondary btn-sm">Reset</a>
+    </div>
+
+  </div>
+
+</form>
+
 <table class="table table-dark table-hover">
-  <thead>
-    <tr>
-      <th>Timestamp</th>
-      <th>ESP Time</th>
-      <th>Tag UID</th>
-      <th>Person</th>
-      <th>Device</th>
-      <th>Result</th>
-      <th>Details</th>
-    </tr>
-  </thead>
+<thead>
+<tr>
+  <th>Timestamp</th>
+  <th>ESP Time</th>
+  <th>Tag UID</th>
+  <th>Person</th>
+  <th>Device</th>
+  <th>Result</th>
+  <th>Details</th>
+</tr>
+</thead>
 
-  <tbody>
-    {% for log in logs %}
-    <tr>
-      <td>{{ log.server_timestamp }}</td>
-      <td>{{ log.esp_timestamp }}</td>
-      <td>{{ log.tag_uid }}</td>
+<tbody>
 
-      <td>
-        {% if log.person %}
-          {{ log.person.full_name }}
-        {% else %}
-          <span class="text-muted">Unknown</span>
-        {% endif %}
-      </td>
+{% for log in page_obj %}
+<tr>
+  <td>{{ log.server_timestamp }}</td>
+  <td>{{ log.esp_timestamp|default:"—" }}</td>
+  <td>{{ log.tag_uid }}</td>
 
-      <td>{{ log.device.name|default:"—" }}</td>
+  <td>
+    {% if log.person %}
+      {{ log.person.full_name }}
+    {% else %}
+      <span class="text-muted">Unknown</span>
+    {% endif %}
+  </td>
+
+  <td>{{ log.device.name|default:"—" }}</td>
+
+
 
   <td>
   {% if log.result == "ALLOWED" %}
@@ -51,18 +158,37 @@
   {% endif %}
 </td>
 
+  <td>{{ log.details|default:"—" }}</td>
+</tr>
 
-      <td>{{ log.details|default:"—" }}</td>
-    </tr>
+{% empty %}
+<tr>
+  <td colspan="7" class="text-center text-muted">No access logs found.</td>
+</tr>
+{% endfor %}
 
-    {% empty %}
-    <tr>
-      <td colspan="7" class="text-center text-muted">
-        No access logs found.
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
+</tbody>
 </table>
+
+<!-- pagination OUTSIDE loop -->
+<div class="pagination text-center">
+    {% if page_obj.has_previous %}
+        <a href="?page=1">« First</a>
+        <a href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+        {% if num == page_obj.number %}
+            <span class="current">{{ num }}</span>
+        {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+            <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Next ›</a>
+        <a href="?page={{ page_obj.paginator.num_pages }}">Last »</a>
+    {% endif %}
+</div>
 
 {% endblock %}

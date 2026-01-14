@@ -83,6 +83,34 @@ form.card select:focus {
 
 
 </style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const form = document.querySelector("form.card");
+
+    // 1) Auto-submit when any <select> or <input type="date"> changes
+    form.querySelectorAll("select, input[type='date']").forEach(function(el) {
+        el.addEventListener("change", function () {
+            form.submit();
+        });
+    });
+
+    // 2) Pressing Enter in any text field submits form
+    form.querySelectorAll("input[type='text']").forEach(function(el) {
+        el.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();  // prevents accidental newlines etc.
+                form.submit();
+            }
+        });
+    });
+
+});
+</script>
+
+
+
 <form method="get" class="card card-body mb-3 bg-dark border-secondary">
 
   <div class="row g-2">

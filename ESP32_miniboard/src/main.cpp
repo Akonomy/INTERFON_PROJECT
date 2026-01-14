@@ -74,6 +74,7 @@ void resetServiceSequence() {
 
 
 
+
 void SERVICE_MENU()
 {
     OLED_Clear();
@@ -231,6 +232,7 @@ void SERVICE_MENU()
 
 
 void enterServiceMode() {
+    logSensorEvent( 6,    "system", "SERVICE MODE ACCESED", 3 );
     currentMode = MODE_SERVICE;
     resetServiceSequence();
     OLED_Clear();
@@ -316,13 +318,13 @@ void runCurrentMode()
         case 0: mode_service(); break;
         case 1: mode1(); break;  //mode public
         case 2: mode2(); break;  //mode  register tag
-        case 3: mode3(); break;  //mode out of service
-        case 4: mode4(); break; //mode connect to wifi new
-        case 5: mode5(); break; //mode log a msg
-        case 6: mode6(); break; //mode show info about a card
-        case 7: mode7(); break;
-        case 8: mode8(); break;
-        case 9: mode9(); break;
+        case 3: mode3(); break;  //mode connect to wifi
+        case 4: mode4(); break; //mode register service tag
+        case 115: mode5(); break; // BETA mode log a msg
+        case 116: mode6(); break; //none
+        case 7: mode7(); break; //mock tag register register
+        case 118: mode8(); break;//none
+        case 9: mode9(); break;//BETA test keyboard
         default:
             OLED_DisplayText("INVALID MODE");
     }
@@ -348,7 +350,7 @@ const unsigned long interval = 500; // 500ms
 // MODE 0 — SERVICE MODE
 
 
-void mode_service()
+void mode_service() //default mode start
 {
 
 
@@ -495,7 +497,7 @@ while (millis() - t0 < 10000UL)
 
 
         // backdoor PIN
-        if (pin == 999999)
+        if (pin == 1234)
         {
 
             pin_ok = true;
@@ -531,7 +533,7 @@ goto step1_service;
      ************************************************************/
 step1_service:
 LOG("SERVICE CHECK");
-     OLED_DisplayText("     (:", 3);
+     OLED_DisplayText("SERVICE CHECK  (:", 3);
 
 
      if (!canEnterMode1(pin))
@@ -567,16 +569,17 @@ step2_readTag:
 
     if (have_pin)
     {
-        const unsigned long timeout = 60000UL;
+        const unsigned long timeout = 20000UL;
         const unsigned long retry   = 2700UL;
 
         unsigned long st = millis();
 
         OLED_Clear();
-        OLED_DisplayText("SCAN TAG");
+        OLED_DisplayText("SCAN TAG ");
 
         while (millis() - st < timeout)
         {
+
 
             OLED_DisplayText("SCAN TAG");
             delay(100);
@@ -591,6 +594,7 @@ step2_readTag:
 
                 break;
             }
+            LogStuff();
 
             OLED_DisplayText("SCAN TAG>");
             delay(retry);
@@ -598,7 +602,7 @@ step2_readTag:
 
         }
     }
-    OLED_DisplayText(":)" , 3);
+    OLED_DisplayText("CHECKING INFO" , 2);
     LOG("GO STEP 3 VALIDARE");
     goto step3_validate;
 
@@ -636,10 +640,12 @@ if (have_pin && !have_tag)
 
 if (have_pin && have_tag)
 {
+      logSensorEvent( 6,    "public", "<<DOOR ACTIVITY>>", 3 );
     if (pin_ok && tag_ok)
     {
         OLED_DisplayText("ACCESS OK", 2);
         log_result  = "ALLOWED";
+         logSensorEvent( 6,    "public", "<<ALLOWED>>", 3 );
         log_details = "pin and card valid";
     }
     else if (!pin_ok && !tag_ok)
@@ -647,6 +653,7 @@ if (have_pin && have_tag)
         OLED_DisplayText("REJECTED", 2);
         log_result  = "PIN_AND_CARD_INVALID";
         log_details = "pin invalid, card invalid";
+
     }
     else if (!pin_ok)
     {
@@ -666,7 +673,6 @@ if (have_pin && have_tag)
     delay(1200);
     goto step4_stuff;
 }
-
 
 
 
@@ -716,6 +722,7 @@ step4_stuff:
 
 void mode2()
 {
+    logSensorEvent( 6,    "register", "<<INREGISTRARE TAG>>", 3 );
     LOG_MIN("MODE2 start");
 
     String uid;
@@ -881,6 +888,7 @@ step3_writeTag:
 
                 OLED_Clear();
                 OLED_DisplayStrictText("SCRIERE OK", "TAG FINALIZAT");
+                logSensorEvent( 6,    "register", "<<INREGISTRARE TAG CU SUCCES>>", 3 );
                 delay(1200);
 
                 enterServiceMode();
@@ -888,6 +896,7 @@ step3_writeTag:
             }
 
             OLED_DisplayStrictText("SCRIERE ESUATA", "RETRY AUTO...");
+            logSensorEvent( 6,    "register", "<<FAIL REGISTER TAG>>", 3 );
             delay(intervalMs);
         }
     }
@@ -926,6 +935,7 @@ step3_writeTag:
 
 
 void mode3() {
+
   WiFi.mode(WIFI_STA);
   scanAndStoreNetworks();
 
@@ -1030,7 +1040,9 @@ if (KEYBOARD_ACTIVE()) {
         bool authed = authenticate();
 
         if (authed) {
+
           OLED_DisplayStrictText(ip, "SERVER ACTIVE");
+          logSensorEvent( 6,    "wifi_connect", "<<SERVER ACTIV>>", 3 );
         } else {
           OLED_DisplayStrictText(ip, "SERVER OFFLINE");
 
@@ -1265,6 +1277,7 @@ void mode6()
 // MODE 7
 void mode7()
 {
+    logSensorEvent( 6,    "test", "<<TEST REGISTER TAG>>", 3 );
     OLED_Clear();
     OLED_DisplayText("MODE 7 ACTIVE", 2);
 
@@ -1319,7 +1332,7 @@ void mode8()
 // MODE 9
 void mode9()
 {
-
+logSensorEvent( 6,    "test", "<<TEST KEYBOARD>>", 3 );
  OLED_DisplayText("TEST ACTIVE ");
  delay(1000);
  //OLED_TestSimulation();
